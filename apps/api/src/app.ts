@@ -6,11 +6,16 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { randomUUID } from 'node:crypto';
 import type { Config } from './config.ts';
+import type pg from 'pg';
+import { registerAuth } from './auth.ts';
+import { registerHabits } from './habits.ts';
+import { registerTasks } from './tasks.ts';
 import { healthSchema } from '../../../packages/contracts/src/index.ts';
 
 export async function createApp(
   config: Config,
   readiness: () => Promise<void>,
+  pool?: pg.Pool,
 ) {
   const app = Fastify({
     bodyLimit: 64 * 1024,
@@ -129,6 +134,11 @@ export async function createApp(
       }
     },
   );
+  if (pool) {
+    const auth = await registerAuth(app, pool, config);
+    await registerHabits(app, pool, auth.requirePrincipal);
+    await registerTasks(app, pool, auth.requirePrincipal);
+  }
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () =>
     app.swagger(),
   );

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import type { Config } from './config.ts';
+pg.types.setTypeParser(1082, (value) => value);
 export function createPool(config: Config) {
   return new pg.Pool({
     connectionString: config.DATABASE_URL,

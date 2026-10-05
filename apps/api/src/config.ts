@@ -13,6 +13,7 @@ export const configSchema = z
         (v) => v.startsWith('postgresql://') || v.startsWith('postgres://'),
         'PostgreSQL URL required',
       ),
+    ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
     DB_SSL: z
       .enum(['true', 'false'])
       .default('false')
@@ -24,11 +25,14 @@ export const configSchema = z
   .superRefine((v, ctx) => {
     if (
       v.NODE_ENV === 'production' &&
-      (!v.DB_SSL || !v.WEB_ORIGIN.startsWith('https://'))
+      (!v.DB_SSL ||
+        !v.WEB_ORIGIN.startsWith('https://') ||
+        !v.ACCESS_TOKEN_SECRET)
     )
       ctx.addIssue({
         code: 'custom',
-        message: 'Production requires verified DB TLS and HTTPS web origin',
+        message:
+          'Production requires verified DB TLS, HTTPS web origin and access-token secret',
       });
   });
 export type Config = z.infer<typeof configSchema>;

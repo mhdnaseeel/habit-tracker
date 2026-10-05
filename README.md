@@ -1,42 +1,42 @@
 # Habit Tracker
 
-A production application under construction, driven by the two original PRDs. **Not ready for production:** authentication and product workflows are not implemented. The web app currently shows an explicitly labelled foundation connection screen.
+A production application under construction, driven by the two original PRDs. **Not ready for production:** signup/login, habit check-ins, a Today view and one-time tasks are implemented, but the full PRD and release gates are incomplete. The UI uses the product owner's approved terracotta, evergreen, cream and sage palette.
 
-## Local setup
+## Run everything in Docker
 
-Use Node 24 LTS and npm. Docker provides PostgreSQL 17. Never use the example password in production.
+Docker and OpenSSL are the only host dependencies; Node and npm run inside containers. From the repository root:
 
 ```sh
-npm ci
-cp .env.example .env
-POSTGRES_PASSWORD=habit_local_only docker compose up -d db
-npm run db:migrate
-npm run dev
+./scripts/docker-up.sh
 ```
 
-Open http://127.0.0.1:5173. API: http://127.0.0.1:3001. Swagger: /api/docs (development only). Run scripts from repository root. The API intentionally fails startup if DATABASE_URL is missing; readiness returns 503 when the database is disconnected. A green readiness response verifies connectivity, not completed product features.
+The script creates ignored `.env.docker` with random local credentials on first run, builds the images, starts PostgreSQL, runs migrations, then starts the API and web containers. Open **http://127.0.0.1:8080**. The API is available through the same origin at `/api/v1`; readiness is `/health/ready` and Swagger is `/api/docs`. To change the port, edit `APP_PORT` in `.env.docker` and run the startup script again. Use the exact `127.0.0.1` origin for local auth.
+
+```sh
+./scripts/docker-test.sh
+docker compose --env-file .env.docker logs -f api web
+docker compose --env-file .env.docker down
+```
+
+The test script runs quality checks and migration/integration tests in Docker against a separate `habit_test` database. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
+
+For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run db:migrate`, and `npm run dev` against a separately running PostgreSQL service.
 
 ## Verification
 
-```sh
-npm run check
-DATABASE_URL=postgresql://habit:password@localhost:5432/disposable_test npm run db:migrate
-TEST_DATABASE_URL=postgresql://habit:password@localhost:5432/disposable_test npm run test:integration
-npm audit --audit-level=moderate
-```
-
-Integration tests require a separate migrated disposable database and refuse to silently skip without a URL. They roll back their fixtures. CI tests Node 24 and a fresh PostgreSQL database, migration reruns, constraints, and quality gates. Domain tests cover local dates, DST boundaries, schedules, streaks, historical correction, partial goal values and quiet hours.
+Run `./scripts/docker-test.sh` for the complete local Docker check. Run `npm audit --audit-level=moderate` when the npm advisory endpoint is reachable. Integration tests use a separate migrated `habit_test` database and refuse to silently skip without a URL. CI tests Node 24 and a fresh PostgreSQL database, migration reruns, constraints, and quality gates.
 
 ## Project map
 
 - `apps/web`: React/Vite frontend.
-- `apps/api`: Fastify configuration, HTTP foundation and PostgreSQL transactions.
+- `apps/api`: Fastify API, authentication, owner-scoped habits/tasks and PostgreSQL transactions.
 - `packages/contracts`: shared schemas.
 - `packages/domain`: pure calendar, schedule, streak and metric functions.
 - `db/migrations`: immutable transactional SQL migrations.
+- `docker` and `compose.yaml`: local all-container web/API/database stack.
 - `plans/habit-tracker.md`: reviewed construction sequence.
 - `docs/adr`: documented resolutions of contradictions.
 - `docs/implementation.md`: phase status and remaining work.
 - `docs/traceability.md`: requirement-level acceptance tracking.
 
-See [architecture](docs/architecture.md), [operations](docs/operations.md) and the unchanged PRDs for scope. No external cloud deployment, paid provider account or remote Git repository is configured.
+See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. No external cloud deployment, paid provider account or remote Git repository is configured.

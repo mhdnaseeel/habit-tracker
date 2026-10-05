@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import type pg from 'pg';
 import { loadConfig } from '../apps/api/src/config.ts';
 import { createApp } from '../apps/api/src/app.ts';
 const config = loadConfig({
@@ -75,4 +76,65 @@ test('app factory allows lifecycle hooks before listen or injection', async () =
   await app.inject('/health/live');
   await app.close();
   assert.equal(closed, true);
+});
+
+test('signup rolls back account creation when its session cannot be created', async () => {
+  const statements: string[] = [];
+  const client = {
+    async query(sql: string) {
+      statements.push(sql);
+      if (sql.startsWith('INSERT INTO users'))
+        return {
+          rows: [
+            {
+              id: 'd61b574b-99ee-4ba2-8d43-e176e6045147',
+              email: 'rollback@example.test',
+              name: 'Rollback',
+              timezone: 'UTC',
+              role: 'user',
+              version: 1,
+              password_hash: 'hashed',
+            },
+          ],
+        };
+      if (sql.startsWith('INSERT INTO sessions'))
+        throw new Error('simulated session failure');
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const pool = {
+    async connect() {
+      return client;
+    },
+  } as unknown as pg.Pool;
+  const app = await createApp(
+    loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://test:test@localhost/test',
+      ACCESS_TOKEN_SECRET: 'test-only-secret-at-least-32-characters',
+    }),
+    async () => {},
+    pool,
+  );
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/signup',
+      headers: { origin: 'http://127.0.0.1:5173' },
+      payload: {
+        email: 'rollback@example.test',
+        password: 'correct horse battery staple',
+        name: 'Rollback',
+        timezone: 'UTC',
+      },
+    });
+    assert.equal(response.statusCode, 500);
+    assert.equal(response.headers['set-cookie'], undefined);
+    assert.equal(statements.at(-1), 'ROLLBACK');
+    assert.ok(statements.includes('BEGIN'));
+    assert.ok(!statements.includes('COMMIT'));
+  } finally {
+    await app.close();
+  }
 });

@@ -2,6 +2,8 @@
 
 Status vocabulary: planned / implemented-unverified / verified. No product requirement is accepted until integration, tests and documentation establish it. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged.
 
+Local Docker milestone (2026-10-05): `compose.yaml` now runs PostgreSQL, a migration job, Fastify and Nginx; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The stack was built and health-checked, and 17 unit/foundation plus 14 PostgreSQL integration tests passed in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+
 | ID    | Source                                | Requirement                                                                                                                                                                          | Implementation                              | Test / acceptance               | Status  |
 | ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------- | ------- |
 | B-001 | `production-ready Backend Prd.md:1`   | Backend Product Requirements (Habit Tracker)                                                                                                                                         | Pending; see construction plan and ADR-0001 | Pending evidence against source | planned |

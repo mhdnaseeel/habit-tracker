@@ -3,14 +3,72 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: habit
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for local database}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Use scripts/docker-up.sh to create local credentials}
       POSTGRES_DB: habit
-    ports: ['127.0.0.1:5432:5432']
-    volumes: ['habit_data:/var/lib/postgresql/data']
+    volumes:
+      - habit_data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U habit -d habit']
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://habit:${POSTGRES_PASSWORD}@db:5432/habit
+      DB_SSL: 'false'
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      PORT: '3001'
+      WEB_ORIGIN: http://127.0.0.1:${APP_PORT:-8080}
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET:?Use scripts/docker-up.sh to create local credentials}
+      DATABASE_URL: postgresql://habit:${POSTGRES_PASSWORD}@db:5432/habit
+      DB_SSL: 'false'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health/ready').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - 127.0.0.1:${APP_PORT:-8080}:80
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   habit_data:
