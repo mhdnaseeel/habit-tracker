@@ -1,0 +1,74 @@
+:root {
+  color-scheme: dark;
+  --color-bg: #121212;
+  --color-text-primary: #fff;
+  --color-text-secondary: #bbb;
+  --color-accent: #00ccc0;
+  --color-warning: #ffaa00;
+  --space-s: 8px;
+  --space-m: 16px;
+  --space-l: 24px;
+  --radius-medium: 8px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  width: min(100% - 32px, 720px);
+  margin: clamp(32px, 12vh, 120px) auto;
+}
+h1 {
+  font-size: 24px;
+  line-height: 1.3;
+}
+h2 {
+  font-size: 20px;
+}
+p {
+  color: var(--color-text-secondary);
+}
+.eyebrow {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--color-accent);
+}
+section {
+  border: 1px solid #444;
+  padding: var(--space-l);
+  border-radius: var(--radius-medium);
+  margin: 32px 0;
+}
+button {
+  font: inherit;
+  min-height: 44px;
+  padding: 8px 24px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--color-accent);
+  color: #121212;
+  cursor: pointer;
+}
+button:hover {
+  filter: brightness(1.08);
+}
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+}
+.note {
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

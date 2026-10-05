@@ -1,0 +1,25 @@
+# Development and operational notes
+
+## Configuration
+
+Copy .env.example into ignored .env locally. Production must provide DATABASE_URL from a secret store, DB_SSL=true (verified CA TLS), HTTPS WEB_ORIGIN, NODE_ENV=production and HOST=0.0.0.0. PORT defaults to 3001. Do not disable certificate verification. Database credentials never belong in Git. .env is loaded only by entrypoints, not by pure modules or test imports.
+
+## Database
+
+Start local Compose database with an explicit POSTGRES_PASSWORD. Back up existing databases before applying migrations; the runner takes an advisory lock and checksums each file. New changes require new numbered migrations. Recovery uses forward fixes or backup restore, never editing applied migrations. Do not run integration tests against production. PostgreSQL image is pinned by major; deployers should pin audited image digests and patch routinely.
+
+## Current deployment limits
+
+Dockerfile builds frontend assets and API. It is an API image; static hosting, TLS termination and production cloud IaC are still pending. It retains development dependencies currently; minimise the runtime image before release. CI is configured but has not run on a remote repository. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
+
+## Troubleshooting
+
+- Startup configuration error: set DATABASE_URL; production also requires TLS and HTTPS origin.
+- Readiness 503: inspect database availability/credentials; do not return a successful fake response.
+- Migration checksum mismatch: restore the applied SQL and write a new migration.
+- Docker connection denied: enable the engine and authorise access to its socket.
+- Browser cannot reach API: start both dev processes and use the same 127.0.0.1 origin as configured.
+
+## Privacy and security
+
+Do not log body payloads, journal text or credentials. Request logs include route templates rather than arbitrary query strings. Nonessential analytics defaults to no consent. Audit retention is planned at 90 days with configurable policy; core user history stays until erasure. Privacy-policy publication, consent enforcement, account export/erasure and backup expiration verification are pending. No claim of GDPR/PDPA compliance is made by schema existence.

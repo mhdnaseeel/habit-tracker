@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: habit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for local database}
+      POSTGRES_DB: habit
+    ports: ['127.0.0.1:5432:5432']
+    volumes: ['habit_data:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U habit -d habit']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  habit_data:
