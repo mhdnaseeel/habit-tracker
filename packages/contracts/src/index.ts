@@ -7,6 +7,14 @@ export const healthSchema = {
   properties: { status: { type: 'string', enum: ['ok', 'unavailable'] } },
 } as const;
 export const dateSchema = z.iso.date();
+export const categorySchema = z.enum([
+  'Wellbeing',
+  'Movement',
+  'Learning',
+  'Mindfulness',
+  'Home',
+  'Other',
+]);
 export const timezoneSchema = z
   .string()
   .min(1)
@@ -39,7 +47,7 @@ export const habitInputSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     description: z.string().max(5000).optional(),
-    category: z.string().max(50).optional(),
+    category: categorySchema.optional(),
     icon: z.string().max(50).optional(),
     color: z
       .string()

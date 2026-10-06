@@ -1,6 +1,6 @@
 # Habit Tracker
 
-A production application under construction, driven by the two original PRDs. **Not ready for production:** signup/login, habit check-ins, a Today view and one-time tasks are implemented, but the full PRD and release gates are incomplete. The UI uses the product owner's approved terracotta, evergreen, cream and sage palette.
+A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The requested Today, routine management, schedules, categories, weekly progress, streaks and history workflows are implemented. Account data is stored in PostgreSQL; there is no browser-storage copy, as the product owner removed that feature. **Not ready for a public production deployment:** the broader PRD and release gates remain incomplete. The UI uses the approved terracotta, evergreen, cream and sage palette.
 
 ## Run everything in Docker
 
@@ -39,4 +39,4 @@ Run `./scripts/docker-test.sh` for the complete local Docker check. Run `npm aud
 - `docs/implementation.md`: phase status and remaining work.
 - `docs/traceability.md`: requirement-level acceptance tracking.
 
-See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. No external cloud deployment, paid provider account or remote Git repository is configured.
+See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. The source is in the [public GitHub repository](https://github.com/mhdnaseeel/habit-tracker). No cloud deployment or paid provider account is configured.

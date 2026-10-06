@@ -2,7 +2,21 @@
 
 Status vocabulary: planned / implemented-unverified / verified. No product requirement is accepted until integration, tests and documentation establish it. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged.
 
-Local Docker milestone (2026-10-05): `compose.yaml` now runs PostgreSQL, a migration job, Fastify and Nginx; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The stack was built and health-checked, and 17 unit/foundation plus 14 PostgreSQL integration tests passed in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+Local Docker milestone (2026-10-06): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The stack was rebuilt and health-checked, and 18 unit/foundation plus 15 PostgreSQL integration tests passed in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+
+Later product-owner feature list (2026-10-06):
+
+| Requested feature                | Evidence                                                                                | Status                                            |
+| -------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Today and check-in/undo          | Today UI; authenticated Today and mutation API integration tests                        | Implemented; new UI interactions await browser QA |
+| Create, edit and delete routines | Routine form and list; owner-scoped create/update/archive API tests                     | Implemented; new UI interactions await browser QA |
+| Custom weekdays                  | Weekly day selector; schedule and history API tests                                     | Implemented; new UI interactions await browser QA |
+| Six categories                   | Shared enum, form and filter; invalid-category and category-update API tests            | Implemented; new UI interactions await browser QA |
+| Weekly progress                  | Seven-day UI; scheduled completion counts from history API                              | Implemented; new UI interactions await browser QA |
+| Individual streaks               | Today UI; domain and check-in integration tests                                         | Implemented; new UI interactions await browser QA |
+| History by week and routine      | Week navigation, per-routine grid and recorded check-ins; history API integration tests | Implemented; new UI interactions await browser QA |
+| Responsive layout                | Desktop sidebar and mobile bottom navigation in CSS                                     | Implemented; viewport QA pending                  |
+| Saves in this browser            | Product owner explicitly withdrew this feature; PostgreSQL account persistence remains  | Removed from scope                                |
 
 | ID    | Source                                | Requirement                                                                                                                                                                          | Implementation                              | Test / acceptance               | Status  |
 | ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ------------------------------- | ------- |

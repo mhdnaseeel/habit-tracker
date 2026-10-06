@@ -10,6 +10,7 @@ import {
   addDays,
   calculateStreak,
   dateInTimezone,
+  datesBetween,
   localDate,
   validateCheckIn,
   isScheduled,
@@ -36,6 +37,13 @@ const actionSchema = z
   })
   .strict();
 const dateAction = z.object({ date: dateSchema.optional() }).strict();
+const historyRange = z
+  .object({ from: dateSchema, to: dateSchema })
+  .strict()
+  .refine(
+    ({ from, to }) =>
+      from <= to && Date.parse(to) - Date.parse(from) <= 6 * 86400000,
+  );
 const editSchema = z
   .object(habitInputSchema.shape)
   .omit({ startDate: true })
@@ -250,6 +258,106 @@ export async function registerHabits(
   pool: pg.Pool,
   authenticate: Authenticate,
 ) {
+  app.get(
+    '/api/v1/history',
+    {
+      schema: {
+        tags: ['History'],
+        summary: 'Read one local week of owned habit history',
+      },
+    },
+    async (request, reply) => {
+      const user = await authenticate(request, reply);
+      if (!user) return;
+      const range = parse(historyRange, request.query, reply, request);
+      if (!range) return;
+      const timezone = (
+        await pool.query<{ timezone: string }>(
+          `SELECT timezone FROM users WHERE id=$1`,
+          [user.userId],
+        )
+      ).rows[0]?.timezone;
+      if (!timezone)
+        return fail(reply, request, 401, 'Authentication required');
+      const today = dateInTimezone(new Date(), timezone);
+      const habitRows = (
+        await pool.query<HabitRow>(
+          `SELECT h.*,u.timezone FROM habits h JOIN users u ON u.id=h.user_id WHERE h.user_id=$1 AND h.start_date<=$3 AND (h.end_date IS NULL OR h.end_date>=$2) AND (h.archived_on IS NULL OR h.archived_on>$2) ORDER BY h.sort_order,h.id`,
+          [user.userId, range.from, range.to],
+        )
+      ).rows;
+      const ids = habitRows.map((habit) => habit.id);
+      const ruleRows = ids.length
+        ? (
+            await pool.query<ScheduleRow & { habit_id: number }>(
+              `SELECT id,habit_id,effective_from,frequency,weekdays,month_days,target,reminder_time::text FROM habit_schedules WHERE user_id=$1 AND habit_id=ANY($2::int[]) AND effective_from<=$3 ORDER BY effective_from`,
+              [user.userId, ids, range.to],
+            )
+          ).rows
+        : [];
+      const logRows = ids.length
+        ? (
+            await pool.query<InstanceRow & { habit_id: number }>(
+              `SELECT id,habit_id,date,status,value,target,version FROM habit_instances WHERE user_id=$1 AND habit_id=ANY($2::int[]) AND date BETWEEN $3 AND $4 ORDER BY date`,
+              [user.userId, ids, range.from, range.to],
+            )
+          ).rows
+        : [];
+      const dates = datesBetween(localDate(range.from), localDate(range.to));
+      const habits = habitRows.map((habit) => {
+        const rules = ruleRows.filter((rule) => rule.habit_id === habit.id);
+        const series = timeline(habit, rules);
+        const logs = new Map(
+          logRows
+            .filter((log) => log.habit_id === habit.id)
+            .map((log) => [log.date, log]),
+        );
+        return {
+          id: habit.id,
+          name: habit.name,
+          category: habit.category,
+          color: habit.color,
+          archived: !habit.active,
+          days: dates.map((date) => {
+            if (!isScheduled(series, date))
+              return { date, scheduled: false, status: null, recorded: false };
+            const log = logs.get(date);
+            return {
+              date,
+              scheduled: true,
+              status:
+                log?.status ??
+                (date > today
+                  ? 'upcoming'
+                  : date < today
+                    ? 'missed'
+                    : 'pending'),
+              recorded: Boolean(log),
+              value: log?.value ?? 0,
+              target: log?.target ?? scheduleOn(rules, date)?.target ?? 1,
+            };
+          }),
+        };
+      });
+      const due = habits
+        .flatMap((habit) => habit.days)
+        .filter((day) => day.scheduled && day.date <= today);
+      const completed = due.filter((day) => day.status === 'completed').length;
+      return {
+        from: range.from,
+        to: range.to,
+        today,
+        habits,
+        progress: {
+          completed,
+          due: due.length,
+          percentage: due.length
+            ? Math.round((completed / due.length) * 100)
+            : null,
+        },
+      };
+    },
+  );
   app.get(
     '/api/v1/today',
     {

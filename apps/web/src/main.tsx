@@ -1,6 +1,17 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
+import { weekRange } from './calendar.ts';
+import { HistoryPanel, WeeklyProgress, type HistoryWeek } from './history.tsx';
 import './styles.css';
+const categories = [
+  'Wellbeing',
+  'Movement',
+  'Learning',
+  'Mindfulness',
+  'Home',
+  'Other',
+] as const;
+type Category = (typeof categories)[number];
 type User = {
   id: string;
   email: string;
@@ -37,7 +48,21 @@ type AuthResponse = {
   user: User;
   token: { accessToken: string; expiresIn: number };
 };
-type View = 'today' | 'habits';
+type HabitSummary = {
+  id: number;
+  name: string;
+  category: string | null;
+  active: boolean;
+  version: number;
+  schedules: {
+    effectiveFrom: string;
+    frequency: 'daily' | 'weekly' | 'monthly';
+    weekdays: number[];
+    monthDays: number[];
+    target: number;
+  }[];
+};
+type View = 'today' | 'habits' | 'history';
 class ApiError extends Error {
   constructor(
     readonly code: number,
@@ -59,9 +84,14 @@ async function decode<T>(response: Response): Promise<T> {
 function App() {
   const token = useRef<string | null>(null);
   const refreshFlight = useRef<Promise<AuthResponse> | null>(null);
+  const formHeading = useRef<HTMLHeadingElement>(null);
   const [user, setUser] = useState<User | null>(null);
   const [today, setToday] = useState<Today | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [currentWeek, setCurrentWeek] = useState<HistoryWeek | null>(null);
+  const [historyWeek, setHistoryWeek] = useState<HistoryWeek | null>(null);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [carryOver, setCarryOver] = useState(true);
   const [showTaskCreate, setShowTaskCreate] = useState(false);
@@ -75,16 +105,20 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [habitName, setHabitName] = useState('');
+  const [category, setCategory] = useState<Category>('Wellbeing');
+  const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
+  const [editingHabit, setEditingHabit] = useState<HabitSummary | null>(null);
   const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>(
     'daily',
   );
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [monthDay, setMonthDay] = useState(1);
   const [target, setTarget] = useState(1);
-  const [habitList, setHabitList] = useState<
-    { id: number; name: string; active: boolean; version: number }[] | null
-  >(null);
+  const [habitList, setHabitList] = useState<HabitSummary[] | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  useEffect(() => {
+    if (showCreate) formHeading.current?.focus();
+  }, [showCreate, editingHabit]);
   function refresh(): Promise<AuthResponse> {
     if (!refreshFlight.current) {
       refreshFlight.current = (async () => {
@@ -135,7 +169,7 @@ function App() {
   async function loadToday() {
     const data = await request<Today>('/api/v1/today');
     setToday(data);
-    await loadTasks(data.date);
+    await Promise.all([loadTasks(data.date), loadCurrentWeek(data.date)]);
   }
   async function loadTasks(date: string) {
     const data = await request<{ tasks: Task[] }>(
@@ -144,10 +178,43 @@ function App() {
     setTasks(data.tasks);
   }
   async function loadHabits() {
-    const data = await request<{
-      habits: { id: number; name: string; active: boolean; version: number }[];
-    }>('/api/v1/habits?limit=100');
-    setHabitList(data.habits);
+    const habits: HabitSummary[] = [];
+    let page = 1;
+    let total = 0;
+    do {
+      const data = await request<{ habits: HabitSummary[]; total: number }>(
+        `/api/v1/habits?limit=100&page=${page}`,
+      );
+      habits.push(...data.habits);
+      total = data.total;
+      page++;
+    } while (habits.length < total);
+    setHabitList(habits);
+  }
+  async function loadCurrentWeek(date: string) {
+    const range = weekRange(date);
+    const data = await request<HistoryWeek>(
+      `/api/v1/history?from=${range.from}&to=${range.to}`,
+    );
+    setCurrentWeek(data);
+  }
+  async function loadHistory(offset: number) {
+    if (!today) return;
+    setHistoryLoading(true);
+    try {
+      const range = weekRange(today.date, offset);
+      const data = await request<HistoryWeek>(
+        `/api/v1/history?from=${range.from}&to=${range.to}`,
+      );
+      setWeekOffset(offset);
+      setHistoryWeek(data);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Could not load history',
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
   }
   useEffect(() => {
     let live = true;
@@ -158,16 +225,9 @@ function App() {
         });
         const state = await decode<{ hasSession: boolean }>(check);
         if (!state.hasSession) return;
-        const data = await refresh();
+        await refresh();
         if (!live) return;
-        const dashboard = await fetch('/api/v1/today', {
-          headers: { Authorization: `Bearer ${data.token.accessToken}` },
-        });
-        const todayData = await decode<Today>(dashboard);
-        if (live) {
-          setToday(todayData);
-          await loadTasks(todayData.date);
-        }
+        if (live) await loadToday();
       } catch (cause) {
         if (live && !(cause instanceof ApiError && cause.code === 401))
           setError(
@@ -211,7 +271,35 @@ function App() {
       setBusy(false);
     }
   }
-  async function createHabit(event: FormEvent) {
+  function closeHabitForm() {
+    setShowCreate(false);
+    setEditingHabit(null);
+    setHabitName('');
+    setCategory('Wellbeing');
+    setFrequency('daily');
+    setWeekdays([]);
+    setTarget(1);
+  }
+  function openCreateHabit() {
+    closeHabitForm();
+    setShowCreate(true);
+  }
+  function editRoutine(habit: HabitSummary) {
+    const schedule = habit.schedules.at(-1);
+    setEditingHabit(habit);
+    setHabitName(habit.name);
+    setCategory(
+      categories.includes(habit.category as Category)
+        ? (habit.category as Category)
+        : 'Other',
+    );
+    setFrequency(schedule?.frequency ?? 'daily');
+    setWeekdays(schedule?.weekdays ?? []);
+    setMonthDay(schedule?.monthDays[0] ?? 1);
+    setTarget(schedule?.target ?? 1);
+    setShowCreate(true);
+  }
+  async function saveHabit(event: FormEvent) {
     event.preventDefault();
     if (!today) return;
     setBusy(true);
@@ -223,18 +311,30 @@ function App() {
           : frequency === 'weekly'
             ? { frequency: 'weekly', weekdays }
             : { frequency: 'monthly', monthDays: [monthDay] };
-      await request('/api/v1/habits', 'POST', {
-        name: habitName,
-        schedule,
-        target,
-        startDate: today.date,
-      });
-      setHabitName('');
-      setShowCreate(false);
+      await request(
+        editingHabit ? `/api/v1/habits/${editingHabit.id}` : '/api/v1/habits',
+        editingHabit ? 'PUT' : 'POST',
+        {
+          name: habitName,
+          category,
+          schedule,
+          target,
+          ...(editingHabit
+            ? { version: editingHabit.version }
+            : { startDate: today.date }),
+        },
+      );
+      closeHabitForm();
       await Promise.all([loadToday(), loadHabits()]);
-      setNotice('Habit saved.');
+      setNotice(
+        editingHabit
+          ? 'Routine updated. Schedule changes may start tomorrow if today was already checked in.'
+          : 'Routine saved.',
+      );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save habit');
+      setError(
+        cause instanceof Error ? cause.message : 'Could not save routine',
+      );
     } finally {
       setBusy(false);
     }
@@ -339,14 +439,19 @@ function App() {
     }
   }
   async function archiveHabit(habit: { id: number; name: string }) {
-    if (!window.confirm(`Archive ${habit.name}? Your history will be kept.`))
+    if (
+      !window.confirm(
+        `Delete ${habit.name} from active routines? Its history will be kept.`,
+      )
+    )
       return;
     setBusy(true);
     setError('');
     try {
       await request(`/api/v1/habits/${habit.id}`, 'DELETE');
+      closeHabitForm();
       await Promise.all([loadToday(), loadHabits()]);
-      setNotice('Habit archived.');
+      setNotice('Routine removed. Its history is still available.');
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Could not archive habit',
@@ -364,6 +469,8 @@ function App() {
       setToday(null);
       setTasks(null);
       setHabitList(null);
+      setCurrentWeek(null);
+      setHistoryWeek(null);
       setNotice('Signed out.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not sign out');
@@ -372,6 +479,7 @@ function App() {
     }
   }
   async function showHabits() {
+    closeHabitForm();
     setView('habits');
     setError('');
     try {
@@ -381,6 +489,12 @@ function App() {
         cause instanceof Error ? cause.message : 'Could not load habits',
       );
     }
+  }
+  function showHistory() {
+    closeHabitForm();
+    setView('history');
+    setError('');
+    void loadHistory(0);
   }
   const dateLabel = today
     ? new Intl.DateTimeFormat('en-IN', {
@@ -493,7 +607,10 @@ function App() {
             <button
               className={view === 'today' ? 'active quiet' : 'quiet'}
               aria-current={view === 'today' ? 'page' : undefined}
-              onClick={() => setView('today')}
+              onClick={() => {
+                closeHabitForm();
+                setView('today');
+              }}
             >
               Today
             </button>
@@ -503,6 +620,13 @@ function App() {
               onClick={() => void showHabits()}
             >
               Habits
+            </button>
+            <button
+              className={view === 'history' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'history' ? 'page' : undefined}
+              onClick={showHistory}
+            >
+              History
             </button>
           </nav>
           {view === 'today' ? (
@@ -531,9 +655,7 @@ function App() {
               ) : today.habits.length === 0 ? (
                 <div className="empty">
                   <p>No habits scheduled for today.</p>
-                  <button onClick={() => setShowCreate(true)}>
-                    Add a habit
-                  </button>
+                  <button onClick={openCreateHabit}>Add a habit</button>
                 </div>
               ) : (
                 <ul className="habit-list">
@@ -605,11 +727,14 @@ function App() {
               )}
               <button
                 className="add"
-                onClick={() => setShowCreate(!showCreate)}
+                onClick={() =>
+                  showCreate ? closeHabitForm() : openCreateHabit()
+                }
                 aria-expanded={showCreate}
               >
                 {showCreate ? 'Close form' : 'Add habit'}
               </button>
+              <WeeklyProgress week={currentWeek} />
               <section aria-labelledby="tasks-title" className="tasks-section">
                 <div className="section-head">
                   <h2 id="tasks-title">Today’s tasks</h2>
@@ -692,43 +817,97 @@ function App() {
                 )}
               </section>
             </section>
-          ) : (
+          ) : view === 'habits' ? (
             <section aria-labelledby="habits-title">
               <div className="section-head">
-                <h2 id="habits-title">Your habits</h2>
+                <h2 id="habits-title">Your routines</h2>
                 <button
-                  onClick={() => setShowCreate(!showCreate)}
+                  onClick={() =>
+                    showCreate ? closeHabitForm() : openCreateHabit()
+                  }
                   aria-expanded={showCreate}
                 >
-                  {showCreate ? 'Close form' : 'Add habit'}
+                  {showCreate ? 'Close form' : 'Add routine'}
                 </button>
               </div>
+              <label className="filter-label">
+                Category
+                <select
+                  value={categoryFilter}
+                  onChange={(event) =>
+                    setCategoryFilter(event.target.value as Category | 'All')
+                  }
+                >
+                  <option value="All">All categories</option>
+                  {categories.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {habitList === null ? (
-                <p>Loading habits…</p>
+                <p>Loading routines…</p>
               ) : habitList.length === 0 ? (
-                <p>No habits yet. Create one to begin.</p>
+                <p>No routines yet. Create one to begin.</p>
+              ) : habitList.filter(
+                  (habit) =>
+                    categoryFilter === 'All' ||
+                    (habit.category ?? 'Other') === categoryFilter,
+                ).length === 0 ? (
+                <p>No routines in this category.</p>
               ) : (
                 <ul className="habit-list">
-                  {habitList.map((h) => (
-                    <li key={h.id} className="habit-row">
-                      <strong>{h.name}</strong>
-                      <button
-                        className="quiet"
-                        disabled={busy}
-                        onClick={() => void archiveHabit(h)}
-                      >
-                        Archive
-                      </button>
-                    </li>
-                  ))}
+                  {habitList
+                    .filter(
+                      (habit) =>
+                        categoryFilter === 'All' ||
+                        (habit.category ?? 'Other') === categoryFilter,
+                    )
+                    .map((h) => (
+                      <li key={h.id} className="habit-row">
+                        <div className="habit-copy">
+                          <strong>{h.name}</strong>
+                          <small>
+                            {h.category ?? 'Other'} ·{' '}
+                            {h.schedules.at(-1)?.frequency ?? 'daily'}
+                          </small>
+                        </div>
+                        <div className="habit-actions">
+                          <button
+                            className="quiet"
+                            disabled={busy}
+                            onClick={() => editRoutine(h)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="quiet"
+                            disabled={busy}
+                            onClick={() => void archiveHabit(h)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </li>
+                    ))}
                 </ul>
               )}
             </section>
+          ) : (
+            <HistoryPanel
+              week={historyWeek}
+              offset={weekOffset}
+              loading={historyLoading}
+              onChangeWeek={(offset) => void loadHistory(offset)}
+            />
           )}
           {showCreate && (
             <section className="create" aria-labelledby="create-title">
-              <h2 id="create-title">New habit</h2>
-              <form onSubmit={createHabit}>
+              <h2 id="create-title" ref={formHeading} tabIndex={-1}>
+                {editingHabit ? 'Edit routine' : 'New routine'}
+              </h2>
+              <form onSubmit={saveHabit}>
                 <label>
                   Name
                   <input
@@ -738,6 +917,21 @@ function App() {
                     onChange={(e) => setHabitName(e.target.value)}
                     placeholder="Name your habit"
                   />
+                </label>
+                <label>
+                  Category
+                  <select
+                    value={category}
+                    onChange={(event) =>
+                      setCategory(event.target.value as Category)
+                    }
+                  >
+                    {categories.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   Repeat
@@ -809,7 +1003,14 @@ function App() {
                     (frequency === 'weekly' && weekdays.length === 0)
                   }
                 >
-                  Save habit
+                  {editingHabit ? 'Save changes' : 'Save routine'}
+                </button>
+                <button
+                  className="quiet"
+                  type="button"
+                  onClick={closeHabitForm}
+                >
+                  Cancel
                 </button>
               </form>
             </section>
@@ -817,7 +1018,7 @@ function App() {
         </>
       )}
       <footer>
-        <p>Progress is built one check-in at a time.</p>
+        <p>Your routines are saved to your account.</p>
       </footer>
     </main>
   );

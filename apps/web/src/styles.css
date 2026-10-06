@@ -200,6 +200,133 @@ input::placeholder {
 .tasks-section {
   margin-top: 48px;
 }
+.weekly-progress {
+  margin-top: 48px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.weekly-progress progress {
+  width: 100%;
+  height: 14px;
+  accent-color: var(--progress);
+}
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+.week-day {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 7px 2px;
+  border-radius: 8px;
+  background: #e8eee8;
+  text-align: center;
+  font-size: 13px;
+}
+.week-day.today {
+  outline: 2px solid var(--accent);
+}
+.week-day strong {
+  font-size: 18px;
+}
+.filter-label {
+  display: grid;
+  gap: 6px;
+  max-width: 240px;
+  margin-bottom: 18px;
+  font-weight: 600;
+}
+.history-navigation {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.history-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.history-scroll:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 3px;
+}
+.history-table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+  text-align: center;
+}
+.history-table th,
+.history-table td {
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.history-table th:first-child {
+  width: 190px;
+  text-align: left;
+}
+.history-table tbody th small {
+  display: block;
+  margin-left: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.history-routine {
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+}
+.history-routine[aria-pressed='true'] {
+  background: #e4ede5;
+  color: var(--text);
+}
+.history-mark {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 700;
+}
+.status-completed {
+  background: var(--progress);
+  color: #fff;
+}
+.status-frozen,
+.status-partial {
+  background: #e6d8bc;
+  color: var(--text);
+}
+.status-missed,
+.status-pending {
+  color: var(--accent-text);
+}
+.status-upcoming,
+.status-none {
+  color: var(--muted);
+}
+.history-records {
+  margin-top: 22px;
+  padding: 18px 22px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.history-records h3 {
+  margin: 0 0 10px;
+}
+.history-records ul {
+  margin: 0;
+  padding-left: 22px;
+}
 .task-create {
   margin-bottom: 20px;
 }
@@ -341,7 +468,9 @@ footer {
     border: 0;
   }
   nav button.quiet {
-    min-width: 44%;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 4px;
     color: var(--bg);
     border-color: transparent;
   }

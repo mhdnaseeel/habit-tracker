@@ -235,6 +235,78 @@ test('archive hides habit but retains history and permits reuse of active name',
     409,
   );
 });
+test('weekly history follows schedules, records check-ins, and stays owner scoped after archive', async () => {
+  const from = addDays(today, -6);
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  const invalidCategory = await call('POST', '/api/v1/habits', {
+    name: 'Invalid category',
+    category: 'Fitness',
+    schedule: { frequency: 'daily' },
+    startDate: from,
+  });
+  assert.equal(invalidCategory.statusCode, 400);
+  const created = await call('POST', '/api/v1/habits', {
+    name: 'Weekly history example',
+    category: 'Learning',
+    schedule: { frequency: 'weekly', weekdays: [weekday] },
+    target: 1,
+    startDate: from,
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const id = created.json().habit.id;
+  const completed = await call('POST', `/api/v1/habits/${id}/complete`, {
+    date: today,
+  });
+  assert.equal(completed.statusCode, 200, completed.body);
+  const updated = await call('PUT', `/api/v1/habits/${id}`, {
+    version: created.json().habit.version,
+    name: 'Weekly reading',
+    category: 'Mindfulness',
+    schedule: { frequency: 'weekly', weekdays: [weekday] },
+  });
+  assert.equal(updated.statusCode, 200, updated.body);
+  assert.equal(updated.json().habit.name, 'Weekly reading');
+  assert.equal(updated.json().habit.category, 'Mindfulness');
+  const url = `/api/v1/history?from=${from}&to=${today}`;
+  const history = await call('GET', url);
+  assert.equal(history.statusCode, 200, history.body);
+  const routine = history
+    .json()
+    .habits.find((h: { id: number }) => h.id === id);
+  assert.equal(routine.category, 'Mindfulness');
+  assert.equal(
+    routine.days.filter((day: { scheduled: boolean }) => day.scheduled).length,
+    1,
+  );
+  assert.deepEqual(
+    routine.days.find((day: { date: string }) => day.date === today),
+    {
+      date: today,
+      scheduled: true,
+      status: 'completed',
+      recorded: true,
+      value: 1,
+      target: 1,
+    },
+  );
+  const other = await call('GET', url, undefined, otherToken);
+  assert.equal(other.statusCode, 200);
+  assert.equal(
+    other.json().habits.some((h: { id: number }) => h.id === id),
+    false,
+  );
+  const invalid = await call(
+    'GET',
+    `/api/v1/history?from=${addDays(today, -7)}&to=${today}`,
+  );
+  assert.equal(invalid.statusCode, 400);
+  assert.equal((await call('DELETE', `/api/v1/habits/${id}`)).statusCode, 204);
+  const archived = await call('GET', url);
+  assert.equal(
+    archived.json().habits.find((h: { id: number }) => h.id === id).archived,
+    true,
+  );
+});
 after(async () => {
   if (userId) await pool.query('DELETE FROM users WHERE id=$1', [userId]);
   if (secondId) await pool.query('DELETE FROM users WHERE id=$1', [secondId]);
