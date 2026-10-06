@@ -70,5 +70,19 @@ services:
       retries: 10
     restart: unless-stopped
 
+  mcp:
+    profiles: ['ai']
+    build:
+      context: .
+      target: mcp
+    environment:
+      DATABASE_URL: postgresql://habit:${POSTGRES_PASSWORD}@db:5432/habit
+      MCP_READ_TOKEN: ${MCP_READ_TOKEN:-}
+    stdin_open: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: 'no'
+
 volumes:
   habit_data:

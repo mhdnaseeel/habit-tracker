@@ -1,6 +1,6 @@
 # Habit Tracker
 
-A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The requested Today, routine management, schedules, categories, weekly progress, streaks and history workflows are implemented. Account data is stored in PostgreSQL; there is no browser-storage copy, as the product owner removed that feature. **Not ready for a public production deployment:** the broader PRD and release gates remain incomplete. The UI uses the approved terracotta, evergreen, cream and sage palette.
+A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The app now includes Today check-ins, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, monthly reflections, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. **The local feature flows are implemented and database-tested; public production deployment remains unverified.**
 
 ## Run everything in Docker
 
@@ -20,6 +20,12 @@ docker compose --env-file .env.docker down
 
 The test script runs quality checks and migration/integration tests in Docker against a separate `habit_test` database. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
 
+For the optional read-only Claude Desktop MCP connector, build the Docker profile and follow [MCP setup](docs/mcp.md):
+
+```sh
+docker compose --env-file .env.docker --profile ai build mcp
+```
+
 For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run db:migrate`, and `npm run dev` against a separately running PostgreSQL service.
 
 ## Verification
@@ -29,7 +35,8 @@ Run `./scripts/docker-test.sh` for the complete local Docker check. Run `npm aud
 ## Project map
 
 - `apps/web`: React/Vite frontend.
-- `apps/api`: Fastify API, authentication, owner-scoped habits/tasks and PostgreSQL transactions.
+- `apps/api`: Fastify API, authentication, owner-scoped habits/tasks/goals/insights and PostgreSQL transactions.
+- `apps/mcp`: token-scoped, read-only local MCP server.
 - `packages/contracts`: shared schemas.
 - `packages/domain`: pure calendar, schedule, streak and metric functions.
 - `db/migrations`: immutable transactional SQL migrations.

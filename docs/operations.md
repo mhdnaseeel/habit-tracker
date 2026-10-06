@@ -10,7 +10,7 @@ Start the local stack with `./scripts/docker-up.sh`. Compose starts PostgreSQL, 
 
 ## Current deployment limits
 
-Dockerfile builds frontend assets, a migration image, a pruned API runtime image, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. GitHub CI passed the quality gates for commit `580f1e3` on the public repository. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
+Dockerfile builds frontend assets, a migration image, pruned API and optional MCP runtime images, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. The optional MCP process is started through the `ai` profile with a user-generated read-only token; see [MCP setup](mcp.md). This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
 
 ## Troubleshooting
 
@@ -22,4 +22,4 @@ Dockerfile builds frontend assets, a migration image, a pruned API runtime image
 
 ## Privacy and security
 
-Do not log body payloads, journal text or credentials. Request logs include route templates rather than arbitrary query strings. Nonessential analytics defaults to no consent. Audit retention is planned at 90 days with configurable policy; core user history stays until erasure. Privacy-policy publication, consent enforcement, account export/erasure and backup expiration verification are pending. No claim of GDPR/PDPA compliance is made by schema existence.
+Do not log body payloads, journal text or credentials. Request logs include route templates rather than arbitrary query strings. Nonessential analytics defaults to no consent. Audit retention is planned at 90 days with configurable policy; core user history stays until erasure. Account export and password-confirmed account deletion are implemented in the API; backup expiration and erase-after-restore verification remain pending. Privacy-policy publication and consent enforcement also remain pending. No claim of GDPR/PDPA compliance is made by schema existence.

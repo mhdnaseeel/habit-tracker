@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/mcp/package.json apps/mcp/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/domain/package.json packages/domain/package.json
 RUN npm ci
@@ -26,6 +27,14 @@ COPY --from=build --chown=node:node /app/package.json ./package.json
 USER node
 EXPOSE 3001
 CMD ["node", "apps/api/dist/apps/api/src/main.js"]
+
+FROM node:24-bookworm-slim AS mcp
+ENV NODE_ENV=development
+WORKDIR /app
+COPY --from=runtime-deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/apps/mcp/dist ./apps/mcp/dist
+USER node
+CMD ["node", "apps/mcp/dist/apps/mcp/src/main.js"]
 
 FROM nginx:stable-alpine AS web
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf

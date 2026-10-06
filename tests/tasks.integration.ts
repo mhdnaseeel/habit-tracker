@@ -130,11 +130,43 @@ test('completion, undo and stale edits stay owner-scoped', async () => {
   assert.equal(undone.statusCode, 200);
   assert.equal(undone.json().task.completed, false);
 });
+test('copying yesterday tasks is idempotent and owner scoped', async () => {
+  const copied = await call('POST', '/api/v1/tasks/copy', {
+    from: yesterday,
+    to: today,
+  });
+  assert.equal(copied.statusCode, 200, copied.body);
+  assert.equal(copied.json().copied, 1);
+  const retry = await call('POST', '/api/v1/tasks/copy', {
+    from: yesterday,
+    to: today,
+  });
+  assert.equal(retry.statusCode, 200);
+  assert.equal(retry.json().copied, 0);
+  const other = await call(
+    'POST',
+    '/api/v1/tasks/copy',
+    { from: yesterday, to: today },
+    otherAccess,
+  );
+  assert.equal(other.json().copied, 0);
+  const list = await call('GET', `/api/v1/tasks?from=${today}&to=${today}`);
+  assert.equal(
+    list
+      .json()
+      .tasks.filter((task: { dueDate: string }) => task.dueDate === today)
+      .length,
+    1,
+  );
+});
 test('archive removes task from active views and preserves instance row', async () => {
   const gone = await call('DELETE', `/api/v1/tasks/${taskId}`);
   assert.equal(gone.statusCode, 204);
   const list = await call('GET', `/api/v1/tasks?from=${yesterday}&to=${today}`);
-  assert.equal(list.json().tasks.length, 0);
+  assert.equal(
+    list.json().tasks.some((task: { id: number }) => task.id === taskId),
+    false,
+  );
   const instance = await pool.query(
     'SELECT 1 FROM task_instances WHERE task_id=$1',
     [taskId],

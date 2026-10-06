@@ -36,6 +36,14 @@ const profileSchema = z
     (v) => v.name !== undefined || v.timezone !== undefined,
     'Nothing to update',
   );
+const deleteAccountSchema = z.object({ password: z.string().min(1) }).strict();
+const mcpTokenSchema = z
+  .object({
+    password: z.string().min(1),
+    label: z.string().trim().min(1).max(100),
+  })
+  .strict();
+const mcpIdSchema = z.object({ id: z.uuid() });
 const uuid = z.uuid();
 interface UserRow {
   id: string;
@@ -492,6 +500,195 @@ export async function registerAuth(
       if (!row)
         return error(reply, request, 409, 'Profile changed on another device');
       return { user: publicUser(row) };
+    },
+  );
+  app.get(
+    '/api/v1/account/export',
+    {
+      schema: {
+        tags: ['Account'],
+        summary: 'Export owned account content as JSON',
+      },
+    },
+    async (request, reply) => {
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      return transaction(pool, async (client) => {
+        await client.query(
+          'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
+        );
+        const tables = {
+          profile: `SELECT id,email,name,timezone,created_at,updated_at FROM users WHERE id=$1`,
+          settings: `SELECT week_start,locale,theme,dnd_start,dnd_end,notify_push,notify_email,notify_sms,analytics_consent FROM settings WHERE user_id=$1`,
+          habits: `SELECT id,name,description,category,icon,color,active,start_date,end_date,archived_on,sort_order,created_at,updated_at FROM habits WHERE user_id=$1 ORDER BY id`,
+          schedules: `SELECT id,habit_id,effective_from,frequency,weekdays,month_days,target,unit,reminder_time FROM habit_schedules WHERE user_id=$1 ORDER BY habit_id,effective_from`,
+          checkIns: `SELECT id,habit_id,date,timezone,status,value,target,notes,created_at,updated_at FROM habit_instances WHERE user_id=$1 ORDER BY date,id`,
+          freezes: `SELECT habit_id,week_start,occurrence_date,created_at FROM weekly_freeze_usage WHERE user_id=$1 ORDER BY occurrence_date`,
+          legacyFreezes: `SELECT habit_id,month,occurrence_date,created_at FROM freeze_usage WHERE user_id=$1 ORDER BY occurrence_date`,
+          tasks: `SELECT id,title,description,due_date,priority,recurrence,carry_over,archived_at,created_at,updated_at FROM tasks WHERE user_id=$1 ORDER BY id`,
+          taskCheckIns: `SELECT task_id,original_date,display_date,completed_at,created_at,updated_at FROM task_instances WHERE user_id=$1 ORDER BY original_date,task_id`,
+          mindset: `SELECT date,energy,focus,motivation,updated_at FROM daily_mindset WHERE user_id=$1 ORDER BY date`,
+          goals: `SELECT id,title,description,category,target,unit,start_date,deadline,completed_at,archived_at,created_at,updated_at FROM goals WHERE user_id=$1 ORDER BY id`,
+          goalSteps: `SELECT id,goal_id,title,completed_at,sort_order,created_at FROM goal_steps WHERE user_id=$1 ORDER BY goal_id,sort_order,id`,
+          goalHabits: `SELECT goal_id,habit_id,linked_on,unlinked_on FROM goal_habits WHERE user_id=$1 ORDER BY goal_id,habit_id`,
+          journal: `SELECT month,content,updated_at FROM monthly_journal WHERE user_id=$1 ORDER BY month`,
+          reflections: `SELECT date,habit_id,task_id,content,mood,created_at,updated_at FROM reflections WHERE user_id=$1 ORDER BY date,id`,
+          assistantTokens: `SELECT id,label,created_at,expires_at,revoked_at FROM mcp_read_tokens WHERE user_id=$1 ORDER BY created_at`,
+        } as const;
+        const data: Record<string, unknown> = {};
+        for (const [key, sql] of Object.entries(tables)) {
+          const rows = (await client.query(sql, [found.userId])).rows;
+          data[key] =
+            key === 'profile' || key === 'settings' ? (rows[0] ?? null) : rows;
+        }
+        reply.header(
+          'Content-Disposition',
+          'attachment; filename="habit-tracker-export.json"',
+        );
+        return { exportedAt: new Date().toISOString(), ...data };
+      });
+    },
+  );
+  app.get(
+    '/api/v1/mcp-tokens',
+    {
+      schema: {
+        tags: ['Account'],
+        summary: 'List read-only assistant tokens without secrets',
+      },
+    },
+    async (request, reply) => {
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      const rows = (
+        await pool.query(
+          'SELECT id,label,created_at,expires_at,revoked_at FROM mcp_read_tokens WHERE user_id=$1 ORDER BY created_at DESC',
+          [found.userId],
+        )
+      ).rows;
+      return { tokens: rows };
+    },
+  );
+  app.post(
+    '/api/v1/mcp-tokens',
+    {
+      ...authLimit,
+      schema: {
+        tags: ['Account'],
+        summary: 'Create one read-only assistant token',
+      },
+    },
+    async (request, reply) => {
+      if (!trustedOrigin(request, config, reply)) return;
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      const input = parse(mcpTokenSchema, request.body, reply, request);
+      if (!input) return;
+      const user = (
+        await pool.query<UserRow>(
+          'SELECT password_hash FROM users WHERE id=$1',
+          [found.userId],
+        )
+      ).rows[0];
+      if (!user || !(await argon2.verify(user.password_hash, input.password)))
+        return error(reply, request, 403, 'Password did not match');
+      const token = `htr_${randomBytes(32).toString('base64url')}`;
+      const created = await transaction(pool, async (client) => {
+        await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [
+          found.userId,
+        ]);
+        const count =
+          (
+            await client.query<{ count: number }>(
+              'SELECT count(*)::int AS count FROM mcp_read_tokens WHERE user_id=$1 AND revoked_at IS NULL AND expires_at>now()',
+              [found.userId],
+            )
+          ).rows[0]?.count ?? 0;
+        if (count >= 5) return null;
+        const inserted =
+          (
+            await client.query<{ id: string; expires_at: Date }>(
+              'INSERT INTO mcp_read_tokens(user_id,token_hash,label) VALUES($1,$2,$3) RETURNING id,expires_at',
+              [found.userId, hash(token), input.label],
+            )
+          ).rows[0] ?? null;
+        if (inserted)
+          await client.query(
+            "INSERT INTO audit_logs(user_id,entity,entity_id,action,request_id) VALUES($1,'McpToken',$2,'CREATE',$3)",
+            [found.userId, inserted.id, request.id],
+          );
+        return inserted;
+      });
+      if (!created)
+        return error(
+          reply,
+          request,
+          409,
+          'Revoke an existing token before creating another',
+        );
+      return reply
+        .code(201)
+        .send({ id: created.id, token, expiresAt: created.expires_at });
+    },
+  );
+  app.delete(
+    '/api/v1/mcp-tokens/:id',
+    {
+      schema: { tags: ['Account'], summary: 'Revoke an owned assistant token' },
+    },
+    async (request, reply) => {
+      if (!trustedOrigin(request, config, reply)) return;
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      const params = parse(mcpIdSchema, request.params, reply, request);
+      if (!params) return;
+      const revoked = await transaction(pool, async (client) => {
+        const result = await client.query(
+          'UPDATE mcp_read_tokens SET revoked_at=coalesce(revoked_at,now()) WHERE id=$1 AND user_id=$2',
+          [params.id, found.userId],
+        );
+        if (!result.rowCount) return false;
+        await client.query(
+          "INSERT INTO audit_logs(user_id,entity,entity_id,action,request_id) VALUES($1,'McpToken',$2,'REVOKE',$3)",
+          [found.userId, params.id, request.id],
+        );
+        return true;
+      });
+      if (!revoked) return error(reply, request, 404, 'Token not found');
+      return reply.code(204).send();
+    },
+  );
+  app.delete(
+    '/api/v1/account',
+    {
+      ...authLimit,
+      schema: {
+        tags: ['Account'],
+        summary: 'Permanently delete owned account and content',
+      },
+    },
+    async (request, reply) => {
+      if (!trustedOrigin(request, config, reply)) return;
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      const input = parse(deleteAccountSchema, request.body, reply, request);
+      if (!input) return;
+      const user = (
+        await pool.query<UserRow>(
+          'SELECT password_hash FROM users WHERE id=$1',
+          [found.userId],
+        )
+      ).rows[0];
+      if (!user || !(await argon2.verify(user.password_hash, input.password)))
+        return error(reply, request, 403, 'Password did not match');
+      await transaction(pool, async (client) => {
+        await client.query('DELETE FROM audit_logs WHERE user_id=$1', [
+          found.userId,
+        ]);
+        await client.query('DELETE FROM users WHERE id=$1', [found.userId]);
+      });
+      clearRefresh(reply, config);
+      return reply.code(204).send();
     },
   );
   return { requirePrincipal };

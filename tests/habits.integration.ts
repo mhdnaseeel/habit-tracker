@@ -171,26 +171,58 @@ test('partial value, idempotency receipts, full completion and undo recalculate 
   );
   assert.equal(otherUndo.statusCode, 404);
 });
-test('one freeze per month, frozen day cannot complete, schedule editing is version checked', async () => {
-  const result = await create('Stretch');
+test('one manual freeze per calendar week requires a two-day streak', async () => {
+  let freezeDate = addDays(today, -2);
+  if (new Date(`${freezeDate}T12:00:00Z`).getUTCDay() === 0)
+    freezeDate = addDays(today, -3);
+  const earlier = addDays(freezeDate, -2);
+  const previous = addDays(freezeDate, -1);
+  const secondDate = addDays(freezeDate, 1);
+  const result = await call('POST', '/api/v1/habits', {
+    name: 'Stretch',
+    schedule: { frequency: 'daily' },
+    startDate: earlier,
+  });
   assert.equal(result.statusCode, 201);
   freezeId = result.json().habit.id;
+  const ineligible = await call('POST', `/api/v1/habits/${freezeId}/skip`, {
+    date: freezeDate,
+  });
+  assert.equal(ineligible.statusCode, 409);
+  assert.equal(
+    (
+      await call('POST', `/api/v1/habits/${freezeId}/complete`, {
+        date: earlier,
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (
+      await call('POST', `/api/v1/habits/${freezeId}/complete`, {
+        date: previous,
+      })
+    ).statusCode,
+    200,
+  );
   const skip = await call('POST', `/api/v1/habits/${freezeId}/skip`, {
-    date: yesterday,
+    date: freezeDate,
   });
   assert.equal(skip.statusCode, 200, skip.body);
   const retry = await call('POST', `/api/v1/habits/${freezeId}/skip`, {
-    date: yesterday,
+    date: freezeDate,
   });
   assert.equal(retry.statusCode, 200);
   const second = await call('POST', `/api/v1/habits/${freezeId}/skip`, {
-    date: today,
+    date: secondDate,
   });
   assert.equal(second.statusCode, 409);
   const frozen = await call('POST', `/api/v1/habits/${freezeId}/complete`, {
-    date: yesterday,
+    date: freezeDate,
   });
   assert.equal(frozen.statusCode, 409);
+});
+test('schedule editing is version checked and owner scoped', async () => {
   const edit = await call('PUT', `/api/v1/habits/${habitId}`, {
     version: 1,
     name: 'Read daily',
@@ -297,7 +329,7 @@ test('weekly history follows schedules, records check-ins, and stays owner scope
   );
   const invalid = await call(
     'GET',
-    `/api/v1/history?from=${addDays(today, -7)}&to=${today}`,
+    `/api/v1/history?from=${addDays(today, -31)}&to=${today}`,
   );
   assert.equal(invalid.statusCode, 400);
   assert.equal((await call('DELETE', `/api/v1/habits/${id}`)).statusCode, 204);

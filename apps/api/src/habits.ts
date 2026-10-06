@@ -11,6 +11,7 @@ import {
   calculateStreak,
   dateInTimezone,
   datesBetween,
+  weekStart,
   localDate,
   validateCheckIn,
   isScheduled,
@@ -42,7 +43,7 @@ const historyRange = z
   .strict()
   .refine(
     ({ from, to }) =>
-      from <= to && Date.parse(to) - Date.parse(from) <= 6 * 86400000,
+      from <= to && Date.parse(to) - Date.parse(from) <= 30 * 86400000,
   );
 const editSchema = z
   .object(habitInputSchema.shape)
@@ -239,9 +240,6 @@ async function updateSync(
     [userId, entity, String(id), version, deleted],
   );
 }
-function monthStart(date: LocalDate) {
-  return `${date.slice(0, 7)}-01`;
-}
 function requestHash(
   userId: string,
   id: number,
@@ -263,7 +261,7 @@ export async function registerHabits(
     {
       schema: {
         tags: ['History'],
-        summary: 'Read one local week of owned habit history',
+        summary: 'Read up to 31 local dates of owned habit history',
       },
     },
     async (request, reply) => {
@@ -409,6 +407,14 @@ export async function registerHabits(
         )
       ).rows;
       const best = new Map(bestRows.map((r) => [r.habit_id, r.best_streak]));
+      const frozenThisWeek = new Set(
+        (
+          await pool.query<{ habit_id: number }>(
+            `SELECT habit_id FROM weekly_freeze_usage WHERE user_id=$1 AND week_start=$2`,
+            [user.userId, weekStart(today)],
+          )
+        ).rows.map((row) => row.habit_id),
+      );
       const habits = habitRows.flatMap((h) => {
         const rules = ruleRows.filter((r) => r.habit_id === h.id);
         const series = timeline(h, rules);
@@ -441,6 +447,10 @@ export async function registerHabits(
             value: status?.value ?? 0,
             status: status?.status ?? 'pending',
             streak: { current: streak.current, best: streak.bestEver },
+            freezeAvailable:
+              streak.current >= 2 &&
+              !frozenThisWeek.has(h.id) &&
+              (status?.status ?? 'pending') === 'pending',
           },
         ];
       });
@@ -878,7 +888,7 @@ export async function registerHabits(
     {
       schema: {
         tags: ['Habits'],
-        summary: 'Spend monthly freeze for scheduled day',
+        summary: 'Spend one manual weekly freeze after a two-day streak',
       },
     },
     async (request, reply) => {
@@ -912,19 +922,36 @@ export async function registerHabits(
           (existing.status === 'completed' || existing.status === 'partial')
         )
           return 'conflict';
+        const priorDate = addDays(date, -1);
+        const priorRows = (
+          await client.query<InstanceRow>(
+            `SELECT date,status,value,target,id,version FROM habit_instances WHERE habit_id=$1 AND user_id=$2 AND date<=$3 ORDER BY date`,
+            [id, user.userId, priorDate],
+          )
+        ).rows;
+        const priorStreak = calculateStreak(
+          timeline(habit, rules),
+          priorRows.map((row) => ({
+            date: localDate(row.date),
+            status: row.status,
+            value: row.value,
+          })),
+          priorDate,
+        );
+        if (priorStreak.current < 2) return 'ineligible';
         const spent =
           (
             await client.query(
-              `SELECT 1 FROM freeze_usage WHERE habit_id=$1 AND month=$2`,
-              [id, monthStart(date)],
+              `SELECT 1 FROM weekly_freeze_usage WHERE habit_id=$1 AND week_start=$2`,
+              [id, weekStart(date)],
             )
           ).rowCount ?? 0;
         if (spent) return 'exhausted';
         const rule = scheduleOn(rules, date);
         if (!rule) return 'invalid';
         await client.query(
-          `INSERT INTO freeze_usage(habit_id,user_id,month,occurrence_date) VALUES($1,$2,$3,$4)`,
-          [id, user.userId, monthStart(date), date],
+          `INSERT INTO weekly_freeze_usage(habit_id,user_id,week_start,occurrence_date) VALUES($1,$2,$3,$4)`,
+          [id, user.userId, weekStart(date), date],
         );
         const record = existing
           ? await client.query<InstanceRow>(
@@ -967,7 +994,14 @@ export async function registerHabits(
           'Date is outside the allowed schedule or correction window',
         );
       if (result === 'exhausted')
-        return fail(reply, request, 409, 'No freeze remains for this month');
+        return fail(reply, request, 409, 'No freeze remains for this week');
+      if (result === 'ineligible')
+        return fail(
+          reply,
+          request,
+          409,
+          'A streak of at least two is required',
+        );
       if (result === 'conflict')
         return fail(
           reply,

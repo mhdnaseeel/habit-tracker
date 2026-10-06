@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { readableDate, weekDates } from './calendar.ts';
+import { rangeDates, readableDate, weekDates } from './calendar.ts';
 
 export type HistoryDay = {
   date: string;
@@ -91,17 +91,22 @@ export function WeeklyProgress({ week }: { week: HistoryWeek | null }) {
 export function HistoryPanel({
   week,
   offset,
+  mode,
   loading,
   onChangeWeek,
+  onChangeMode,
 }: {
   week: HistoryWeek | null;
   offset: number;
+  mode: 'week' | 'month';
   loading: boolean;
   onChangeWeek: (offset: number) => void;
+  onChangeMode: (mode: 'week' | 'month') => void;
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const selected =
     week?.habits.find((habit) => habit.id === selectedId) ?? week?.habits[0];
+  const dates = week ? rangeDates(week.from, week.to) : [];
   return (
     <section aria-labelledby="history-title">
       <div className="section-head">
@@ -115,16 +120,34 @@ export function HistoryPanel({
             onClick={() => onChangeWeek(offset - 1)}
             disabled={loading}
           >
-            Previous week
+            Previous {mode}
           </button>
           <button
             className="quiet"
             onClick={() => onChangeWeek(offset + 1)}
             disabled={loading || offset >= 0}
           >
-            Next week
+            Next {mode}
           </button>
         </div>
+      </div>
+      <div className="history-mode" aria-label="History period">
+        <button
+          className={mode === 'week' ? '' : 'quiet'}
+          aria-pressed={mode === 'week'}
+          onClick={() => onChangeMode('week')}
+          disabled={loading}
+        >
+          Week
+        </button>
+        <button
+          className={mode === 'month' ? '' : 'quiet'}
+          aria-pressed={mode === 'month'}
+          onClick={() => onChangeMode('month')}
+          disabled={loading}
+        >
+          Month grid
+        </button>
       </div>
       {week && (
         <p>
@@ -155,11 +178,14 @@ export function HistoryPanel({
             aria-label="Routine check-ins by day"
             tabIndex={0}
           >
-            <table className="history-table">
+            <table
+              className="history-table"
+              style={{ minWidth: Math.max(650, 190 + dates.length * 56) }}
+            >
               <thead>
                 <tr>
                   <th scope="col">Routine</th>
-                  {weekDates(week.from).map((date) => (
+                  {dates.map((date) => (
                     <th key={date} scope="col">
                       {dayName(date)}
                       <br />

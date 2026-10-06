@@ -2,7 +2,21 @@
 
 Status vocabulary: planned / implemented-unverified / verified. No product requirement is accepted until integration, tests and documentation establish it. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged.
 
-Local Docker milestone (2026-10-06): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The stack was rebuilt and health-checked, and 18 unit/foundation plus 15 PostgreSQL integration tests passed in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+Local Docker milestone (2026-10-06): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx, with an optional local MCP profile; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The current suite passes 19 unit/foundation plus 21 PostgreSQL integration tests in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+
+Expanded feature request (2026-10-06):
+
+| Feature         | Implementation and evidence                                                                        | Limit                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Today dashboard | Due list, check-in/undo, completion ring; owner-scoped habit tests                                 | Mobile interaction QA pending                         |
+| Habit grid      | Week/month history, daily/weekly/monthly schedules; calendar and API tests                         | Browser grid QA pending                               |
+| Weekly freeze   | Manual one per habit Monday–Sunday after two-day streak; integration test                          | No automatic spending by owner choice                 |
+| Weekly tasks    | Daily task rings, copy-yesterday receipt, mindset ratings; integration tests                       | Browser interaction QA pending                        |
+| Goals           | 10 areas, steps, deadlines, habit links, progress; integration tests                               | Area names beyond source examples are product choices |
+| Insights        | Consistency, comparable weeks, strongest/slipping, personal leaderboard, draggable trend; API test | Browser chart QA pending                              |
+| Monthly journal | Plain text month entries, version-checked edits/deletes; stale-write test                          | Browser interaction QA pending                        |
+| AI/MCP          | Read-only local stdio server, token scope/revocation; real SDK client integration test             | Remote Claude.ai connector not deployed               |
+| Account/data    | DB-backed account, focus refresh, export and password-confirmed deletion; API tests                | Production backup erasure unverified                  |
 
 Later product-owner feature list (2026-10-06):
 

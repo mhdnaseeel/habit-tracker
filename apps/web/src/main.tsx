@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { weekRange } from './calendar.ts';
+import { monthRange, weekRange } from './calendar.ts';
 import { HistoryPanel, WeeklyProgress, type HistoryWeek } from './history.tsx';
+import {
+  GoalPlanner,
+  InsightsPanel,
+  JournalPanel,
+  SettingsPanel,
+  TaskTracker,
+} from './features.tsx';
 import './styles.css';
 const categories = [
   'Wellbeing',
@@ -28,6 +35,7 @@ type TodayHabit = {
   value: number;
   status: 'pending' | 'partial' | 'completed' | 'frozen' | 'missed';
   streak: { current: number; best: number };
+  freezeAvailable: boolean;
 };
 type Today = {
   date: string;
@@ -62,7 +70,15 @@ type HabitSummary = {
     target: number;
   }[];
 };
-type View = 'today' | 'habits' | 'history';
+type View =
+  | 'today'
+  | 'habits'
+  | 'history'
+  | 'tasks'
+  | 'goals'
+  | 'insights'
+  | 'journal'
+  | 'settings';
 class ApiError extends Error {
   constructor(
     readonly code: number,
@@ -91,6 +107,7 @@ function App() {
   const [currentWeek, setCurrentWeek] = useState<HistoryWeek | null>(null);
   const [historyWeek, setHistoryWeek] = useState<HistoryWeek | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [historyMode, setHistoryMode] = useState<'week' | 'month'>('week');
   const [historyLoading, setHistoryLoading] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [carryOver, setCarryOver] = useState(true);
@@ -198,14 +215,21 @@ function App() {
     );
     setCurrentWeek(data);
   }
-  async function loadHistory(offset: number) {
+  async function loadHistory(
+    offset: number,
+    mode: 'week' | 'month' = historyMode,
+  ) {
     if (!today) return;
     setHistoryLoading(true);
     try {
-      const range = weekRange(today.date, offset);
+      const range =
+        mode === 'week'
+          ? weekRange(today.date, offset)
+          : monthRange(today.date, offset);
       const data = await request<HistoryWeek>(
         `/api/v1/history?from=${range.from}&to=${range.to}`,
       );
+      setHistoryMode(mode);
       setWeekOffset(offset);
       setHistoryWeek(data);
     } catch (cause) {
@@ -241,6 +265,30 @@ function App() {
       live = false;
     };
   }, []);
+  useEffect(() => {
+    if (!user) return;
+    const sync = () => {
+      if (document.visibilityState !== 'visible') return;
+      void loadToday()
+        .then(async () => {
+          if (view === 'habits') await loadHabits();
+          if (view === 'history') await loadHistory(weekOffset, historyMode);
+        })
+        .catch((cause) =>
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : 'Could not refresh account data',
+          ),
+        );
+    };
+    window.addEventListener('focus', sync);
+    const interval = window.setInterval(sync, 60000);
+    return () => {
+      window.removeEventListener('focus', sync);
+      window.clearInterval(interval);
+    };
+  }, [user?.id, view, weekOffset, historyMode]);
   async function submitAuth(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -389,7 +437,7 @@ function App() {
     if (!today) return;
     if (
       action === 'skip' &&
-      !window.confirm(`Use this month's freeze for ${habit.name}?`)
+      !window.confirm(`Use this week's freeze for ${habit.name}?`)
     )
       return;
     const previous = today;
@@ -495,6 +543,22 @@ function App() {
     setView('history');
     setError('');
     void loadHistory(0);
+  }
+  function showOther(next: View) {
+    closeHabitForm();
+    setError('');
+    setView(next);
+  }
+  function accountDeleted() {
+    token.current = null;
+    setUser(null);
+    setToday(null);
+    setTasks(null);
+    setHabitList(null);
+    setCurrentWeek(null);
+    setHistoryWeek(null);
+    setView('today');
+    setNotice('Your account was deleted.');
   }
   const dateLabel = today
     ? new Intl.DateTimeFormat('en-IN', {
@@ -628,6 +692,41 @@ function App() {
             >
               History
             </button>
+            <button
+              className={view === 'tasks' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'tasks' ? 'page' : undefined}
+              onClick={() => showOther('tasks')}
+            >
+              Tasks
+            </button>
+            <button
+              className={view === 'goals' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'goals' ? 'page' : undefined}
+              onClick={() => showOther('goals')}
+            >
+              Goals
+            </button>
+            <button
+              className={view === 'insights' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'insights' ? 'page' : undefined}
+              onClick={() => showOther('insights')}
+            >
+              Insights
+            </button>
+            <button
+              className={view === 'journal' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'journal' ? 'page' : undefined}
+              onClick={() => showOther('journal')}
+            >
+              Journal
+            </button>
+            <button
+              className={view === 'settings' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'settings' ? 'page' : undefined}
+              onClick={() => showOther('settings')}
+            >
+              Settings
+            </button>
           </nav>
           {view === 'today' ? (
             <section aria-labelledby="today-title">
@@ -639,6 +738,11 @@ function App() {
                 <div
                   className="progress"
                   role="status"
+                  style={
+                    {
+                      '--ring-progress': `${today?.progress.percentage ?? 0}%`,
+                    } as React.CSSProperties
+                  }
                   aria-label={
                     today
                       ? `${today.progress.completed} of ${today.progress.due} habits completed`
@@ -697,10 +801,15 @@ function App() {
                             <button
                               className="quiet"
                               onClick={() => void changeHabit(habit, 'skip')}
-                              disabled={busy}
-                              aria-label={`Skip ${habit.name}`}
+                              disabled={busy || !habit.freezeAvailable}
+                              title={
+                                habit.freezeAvailable
+                                  ? 'Protect this streak once this week'
+                                  : 'Requires a two-day streak and an unused weekly freeze'
+                              }
+                              aria-label={`Freeze ${habit.name}`}
                             >
-                              Skip
+                              ❄ Freeze
                             </button>
                           )
                         )}
@@ -894,13 +1003,33 @@ function App() {
                 </ul>
               )}
             </section>
-          ) : (
+          ) : view === 'history' ? (
             <HistoryPanel
               week={historyWeek}
               offset={weekOffset}
+              mode={historyMode}
               loading={historyLoading}
               onChangeWeek={(offset) => void loadHistory(offset)}
+              onChangeMode={(mode) => void loadHistory(0, mode)}
             />
+          ) : view === 'tasks' ? (
+            today ? (
+              <TaskTracker api={request} today={today.date} />
+            ) : (
+              <p>Loading tasks…</p>
+            )
+          ) : view === 'goals' ? (
+            <GoalPlanner api={request} />
+          ) : view === 'insights' ? (
+            <InsightsPanel api={request} />
+          ) : view === 'journal' ? (
+            today ? (
+              <JournalPanel api={request} today={today.date} />
+            ) : (
+              <p>Loading journal…</p>
+            )
+          ) : (
+            <SettingsPanel api={request} onDeleted={accountDeleted} />
           )}
           {showCreate && (
             <section className="create" aria-labelledby="create-title">

@@ -24,7 +24,8 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button {
@@ -130,7 +131,8 @@ form > label {
   font-weight: 600;
 }
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 46px;
   padding: 10px 12px;
@@ -138,6 +140,9 @@ select {
   border-radius: 8px;
   background: #ffffff;
   color: var(--text);
+}
+textarea {
+  resize: vertical;
 }
 input::placeholder {
   color: #55645a;
@@ -168,7 +173,12 @@ input::placeholder {
   width: 70px;
   display: grid;
   place-items: center;
-  border: 5px solid var(--progress);
+  background:
+    radial-gradient(closest-side, var(--surface) 78%, transparent 80%),
+    conic-gradient(
+      var(--progress) var(--ring-progress),
+      #dce4db var(--ring-progress)
+    );
   border-radius: 50%;
   font-weight: 700;
   color: var(--text);
@@ -246,6 +256,12 @@ input::placeholder {
   gap: 8px;
   flex-wrap: wrap;
 }
+.history-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
 .history-scroll {
   max-width: 100%;
   overflow-x: auto;
@@ -259,7 +275,7 @@ input::placeholder {
 }
 .history-table {
   width: 100%;
-  min-width: 650px;
+  min-width: max(650px, 100%);
   border-collapse: collapse;
   text-align: center;
 }
@@ -329,6 +345,234 @@ input::placeholder {
 }
 .task-create {
   margin-bottom: 20px;
+}
+.task-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin: 22px 0;
+}
+.task-day {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.task-day.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.mini-ring {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 12px;
+  background:
+    radial-gradient(closest-side, var(--surface) 75%, transparent 77%),
+    conic-gradient(
+      var(--progress) var(--ring-progress),
+      #dce4db var(--ring-progress)
+    );
+}
+.inline-form {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  margin: 14px 0;
+}
+.inline-form label {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  font-weight: 600;
+}
+.mindset-card,
+.goal-card,
+.settings-card {
+  padding: 20px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.mindset-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.mindset-fields label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.mindset-card button {
+  margin-top: 16px;
+}
+.goal-list {
+  display: grid;
+  gap: 12px;
+}
+.goal-card h3,
+.goal-card h4,
+.settings-card h3 {
+  margin: 0 0 8px;
+}
+.goal-card progress {
+  width: 100%;
+  height: 12px;
+  accent-color: var(--progress);
+}
+.step-list {
+  padding: 0;
+  list-style: none;
+}
+.step-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0;
+}
+.step-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.step-list input {
+  width: 20px;
+  min-height: 20px;
+  accent-color: var(--progress);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.range-label {
+  display: grid;
+  max-width: 320px;
+  gap: 8px;
+  font-weight: 600;
+}
+.range-label input {
+  min-height: 28px;
+  accent-color: var(--accent);
+}
+.insight-summary,
+.insight-lists {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.insight-summary > div {
+  display: grid;
+  gap: 3px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.insight-summary strong {
+  font-size: 26px;
+}
+.insight-summary small,
+.insight-summary span {
+  color: var(--muted);
+}
+.insight-lists {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.trend-scroll {
+  overflow-x: auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: grab;
+}
+.trend-scroll:active {
+  cursor: grabbing;
+}
+.trend-chart {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  min-width: max-content;
+}
+.trend-column {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: 76px;
+}
+.trend-track {
+  display: flex;
+  align-items: end;
+  width: 48px;
+  height: 150px;
+  background: #e8eee8;
+  border-radius: 6px 6px 0 0;
+}
+.trend-track > div {
+  width: 100%;
+  background: var(--progress);
+  border-radius: 6px 6px 0 0;
+}
+.leaderboard {
+  padding-left: 24px;
+}
+.leaderboard li {
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.leaderboard span {
+  display: inline-block;
+  min-width: 45%;
+}
+.leaderboard small {
+  margin-left: 12px;
+  color: var(--muted);
+}
+.journal-form {
+  max-width: none;
+}
+.settings-card {
+  max-width: 600px;
+}
+.token-once {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  margin-top: 16px;
+  border-radius: 8px;
+  background: #e4ede5;
+}
+.token-once code {
+  overflow-wrap: anywhere;
+}
+.token-list {
+  padding: 0;
+  list-style: none;
+}
+.token-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.destructive {
+  width: fit-content;
+  border-color: var(--error);
+  background: var(--error);
+  color: #fff;
 }
 .checkbox-label {
   display: flex;
@@ -412,6 +656,28 @@ footer {
   .section-head {
     align-items: flex-start;
   }
+  .task-week {
+    gap: 3px;
+  }
+  .task-day {
+    min-width: 0;
+    padding: 8px 2px;
+    font-size: 12px;
+  }
+  .mini-ring {
+    width: 35px;
+    height: 35px;
+    font-size: 10px;
+  }
+  .mindset-fields,
+  .insight-summary,
+  .insight-lists {
+    grid-template-columns: 1fr;
+  }
+  .inline-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
@@ -461,16 +727,18 @@ footer {
     inset: auto 0 0;
     z-index: 2;
     display: flex;
-    justify-content: space-around;
+    justify-content: flex-start;
+    overflow-x: auto;
     margin: 0;
     padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
     background: var(--sidebar);
     border: 0;
   }
   nav button.quiet {
-    flex: 1;
-    min-width: 0;
-    padding: 8px 4px;
+    flex: 0 0 auto;
+    min-width: 72px;
+    padding: 8px;
+    white-space: nowrap;
     color: var(--bg);
     border-color: transparent;
   }

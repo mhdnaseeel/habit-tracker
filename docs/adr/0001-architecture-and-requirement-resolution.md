@@ -2,6 +2,8 @@
 
 Date: 2026-10-05. Status: accepted. Decider: engineering judgment authorised by the master prompt.
 
+Later product-owner decisions on weekly freezes, navigation, journal, and MCP supersede the corresponding rows below; see ADR-0003.
+
 ## Context
 
 Backend §2 allows separate services **or well-defined modules**, and a primary SQL database. The master prompt requires minimal infrastructure. Both PRDs contain conflicting examples and unspecified policies. Decisions below resolve these explicitly; they do not claim missing wireframes or provider credentials exist.

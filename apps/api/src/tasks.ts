@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { z } from 'zod';
 import { dateSchema } from '../../../packages/contracts/src/index.ts';
-import { dateInTimezone } from '../../../packages/domain/src/index.ts';
+import {
+  addDays,
+  dateInTimezone,
+  localDate,
+} from '../../../packages/domain/src/index.ts';
 import type { Principal } from './auth.ts';
 import { transaction } from './database.ts';
 
@@ -26,6 +30,7 @@ const rangeSchema = z
     (v) =>
       v.from <= v.to && Date.parse(v.to) - Date.parse(v.from) <= 31 * 86400000,
   );
+const copyInput = z.object({ from: dateSchema, to: dateSchema }).strict();
 interface TaskRow {
   id: number;
   user_id: string;
@@ -123,6 +128,87 @@ export async function registerTasks(
   pool: pg.Pool,
   authenticate: Authenticate,
 ) {
+  app.post(
+    '/api/v1/tasks/copy',
+    {
+      schema: {
+        tags: ['Tasks'],
+        summary: 'Copy the prior daily task list once',
+      },
+    },
+    async (request, reply) => {
+      const user = await authenticate(request, reply);
+      if (!user) return;
+      const input = parse(copyInput, request.body, reply, request);
+      if (!input) return;
+      const today = (
+        await pool.query<{ timezone: string }>(
+          'SELECT timezone FROM users WHERE id=$1',
+          [user.userId],
+        )
+      ).rows[0]?.timezone;
+      if (!today) return fail(reply, request, 401, 'Authentication required');
+      if (
+        input.to !== addDays(localDate(input.from), 1) ||
+        input.to > dateInTimezone(new Date(), today)
+      )
+        return fail(
+          reply,
+          request,
+          400,
+          'Copy requires consecutive dates no later than today',
+        );
+      const copied = await transaction(pool, async (client) => {
+        await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [
+          user.userId,
+        ]);
+        const sources = (
+          await client.query<{
+            id: number;
+            title: string;
+            description: string | null;
+            priority: number;
+          }>(
+            'SELECT id,title,description,priority FROM tasks WHERE user_id=$1 AND due_date=$2 AND archived_at IS NULL ORDER BY priority,id LIMIT 500',
+            [user.userId, input.from],
+          )
+        ).rows;
+        let count = 0;
+        for (const source of sources) {
+          const existing = await client.query(
+            'SELECT 1 FROM task_copies WHERE user_id=$1 AND source_task_id=$2 AND target_date=$3',
+            [user.userId, source.id, input.to],
+          );
+          if (existing.rowCount) continue;
+          const row = (
+            await client.query<{ id: number }>(
+              'INSERT INTO tasks(user_id,title,description,due_date,priority,carry_over) VALUES($1,$2,$3,$4,$5,false) RETURNING id',
+              [
+                user.userId,
+                source.title,
+                source.description,
+                input.to,
+                source.priority,
+              ],
+            )
+          ).rows[0];
+          if (!row) throw new Error('Copied task insert failed');
+          await client.query(
+            'INSERT INTO task_instances(task_id,user_id,original_date,display_date) VALUES($1,$2,$3,$3)',
+            [row.id, user.userId, input.to],
+          );
+          await client.query(
+            'INSERT INTO task_copies(user_id,source_task_id,copied_task_id,source_date,target_date) VALUES($1,$2,$3,$4,$5)',
+            [user.userId, source.id, row.id, input.from, input.to],
+          );
+          await audit(client, user.userId, row.id, 'COPY', request.id, 1);
+          count++;
+        }
+        return count;
+      });
+      return { copied };
+    },
+  );
   app.get(
     '/api/v1/tasks',
     {

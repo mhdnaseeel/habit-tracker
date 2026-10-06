@@ -27,6 +27,10 @@ export function addDays(date: LocalDate, days: number): LocalDate {
   cursor.setUTCDate(cursor.getUTCDate() + days);
   return localDate(cursor.toISOString().slice(0, 10));
 }
+export function weekStart(date: LocalDate): LocalDate {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return addDays(date, -(weekday === 0 ? 6 : weekday - 1));
+}
 export function datesBetween(from: LocalDate, to: LocalDate): LocalDate[] {
   if (to < from) return [];
   const result: LocalDate[] = [];
