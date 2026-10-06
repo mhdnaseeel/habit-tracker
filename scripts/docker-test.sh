@@ -13,6 +13,7 @@ if [ "$(docker compose --env-file .env.docker exec -T db psql -U habit -d postgr
 fi
 
 docker compose --env-file .env.docker run --rm --no-deps migrate sh -c '
+  set -e
   npm run check
   export DATABASE_URL="${DATABASE_URL%/habit}/habit_test"
   npm run db:migrate
