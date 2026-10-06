@@ -23,25 +23,22 @@ export async function createApp(
     bodyLimit: 64 * 1024,
     trustProxy: false,
     genReqId: () => randomUUID(),
-    logger:
-      config.NODE_ENV === 'test'
-        ? false
-        : {
-            level: config.LOG_LEVEL,
-            redact: {
-              paths: [
-                'req.headers.authorization',
-                'req.headers.cookie',
-                'res.headers["set-cookie"]',
-                'password',
-                'password_hash',
-                'token',
-                'content',
-                'DATABASE_URL',
-              ],
-              censor: '[REDACTED]',
-            },
-          },
+    logger: {
+      level: config.LOG_LEVEL,
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'res.headers["set-cookie"]',
+          'password',
+          'password_hash',
+          'token',
+          'content',
+          'DATABASE_URL',
+        ],
+        censor: '[REDACTED]',
+      },
+    },
     logController: new Fastify.LogController({ disableRequestLogging: true }),
   });
   await app.register(helmet);
@@ -53,7 +50,7 @@ export async function createApp(
         title: 'Habit Tracker API',
         version: '0.1.0',
         description:
-          'Implemented foundation endpoints. Product endpoints are added with their tested implementation.',
+          'Habit Tracker account, routine, task, goal, insight and journal endpoints.',
       },
     },
   });

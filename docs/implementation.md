@@ -1,6 +1,6 @@
 # Living implementation checklist
 
-Updated 2026-10-06. The source PRDs remain unchanged. Later product-owner choices are recorded in ADR-0002 and ADR-0003. The product owner removed the browser-storage-copy feature; account data persists in PostgreSQL. ECC planning and security review informed this work. Confidence is high for the local Docker stack and database-backed API flows. Browser accessibility and production deployment remain unverified.
+Updated 2026-10-07. The source PRDs remain unchanged. Later product-owner choices are recorded in ADR-0002 and ADR-0003. The product owner removed the browser-storage-copy feature and later requested removal of automated test files. Account data persists in PostgreSQL. The Docker seed command supplies a separate manual-review account. Browser accessibility and production deployment remain unverified.
 
 | Area                       | Current state                                                                                                                                                          | Remaining work                                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -15,8 +15,8 @@ Updated 2026-10-06. The source PRDs remain unchanged. Later product-owner choice
 ## Verification evidence
 
 - `./scripts/docker-up.sh` built and started PostgreSQL, migration, API and web containers. PostgreSQL, API and web health checks passed; the migration applied `001_initial.sql`. Web `/`, proxied `/health/ready`, and `/api/v1/session` returned HTTP 200 on `127.0.0.1:8080`.
-- `./scripts/docker-test.sh` passed inside Docker on 2026-10-06: formatting, lint, strict type checking, 19 unit/foundation tests, API/MCP/web builds, and 21 PostgreSQL integration tests against separate `habit_test`. Tests cover weekly freezes, task copies, goals, journal stale-edit conflicts, insights, account deletion, and real MCP client reads/revocation.
-- Earlier [GitHub quality gates](https://github.com/mhdnaseeel/habit-tracker/actions/runs/37424489920) passed on public commit `580f1e3`; new work needs its own remote CI run after push.
+- Historical evidence: on 2026-10-06, the Docker suite passed 19 unit/foundation tests and 21 PostgreSQL integration tests. Their files were removed on 2026-10-07 at the product owner's request; this evidence no longer represents an active regression suite.
+- Earlier [GitHub quality gates](https://github.com/mhdnaseeel/habit-tracker/actions/runs/37503236638) passed with the automated suite on commit `cb00c8d`; new commits use formatting, lint, typecheck, builds, and dependency audit only.
 - A proxied HTTP smoke flow passed for signup, habit creation, task creation, and Today reads; its temporary account was removed afterward.
 - Browser interaction previously verified signup, habit creation and partial/full completion with a real API/database. Browser verification of the new routine editing and history screens did not run because automatic approval review could not complete after a usage limit was hit.
 - Docker build-time `npm ci` and `npm prune` audits reported 0 vulnerabilities. This is a point-in-time npm advisory check, not a full security audit.

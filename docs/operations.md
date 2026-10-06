@@ -6,7 +6,7 @@ For the local all-Docker stack, `scripts/docker-up.sh` creates ignored `.env.doc
 
 ## Database and Compose lifecycle
 
-Start the local stack with `./scripts/docker-up.sh`. Compose starts PostgreSQL, waits for its health check, runs checksum-verified migrations, then starts the API and web proxy. `./scripts/docker-test.sh` uses a separate `habit_test` database in the same local server. `docker compose --env-file .env.docker down` preserves the named volume; adding `-v` deletes all local data. Back up existing databases before applying migrations; the runner takes an advisory lock and checksums each file. New changes require new numbered migrations. Recovery uses forward fixes or backup restore, never editing applied migrations. Do not run integration tests against production. PostgreSQL image is pinned by major; deployers should pin audited image digests and patch routinely.
+Start the local stack with `./scripts/docker-up.sh`. Compose starts PostgreSQL, waits for its health check, runs checksum-verified migrations, then starts the API and web proxy. Run `./scripts/docker-seed.sh` to create a repeatable, isolated demo account for manual checks; its credentials are kept in ignored `.env.demo`. `docker compose --env-file .env.docker down` preserves the named volume; adding `-v` deletes all local data. Back up existing databases before applying migrations; the runner takes an advisory lock and checksums each file. New changes require new numbered migrations. Recovery uses forward fixes or backup restore, never editing applied migrations. PostgreSQL image is pinned by major; deployers should pin audited image digests and patch routinely.
 
 ## Current deployment limits
 

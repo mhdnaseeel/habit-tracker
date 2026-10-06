@@ -8,17 +8,17 @@ Docker and OpenSSL are the only host dependencies; Node and npm run inside conta
 
 ```sh
 ./scripts/docker-up.sh
+./scripts/docker-seed.sh
 ```
 
 The script creates ignored `.env.docker` with random local credentials on first run, builds the images, starts PostgreSQL, runs migrations, then starts the API and web containers. Open **http://127.0.0.1:8080**. The API is available through the same origin at `/api/v1`; readiness is `/health/ready` and Swagger is `/api/docs`. To change the port, edit `APP_PORT` in `.env.docker` and run the startup script again. Use the exact `127.0.0.1` origin for local auth.
 
 ```sh
-./scripts/docker-test.sh
 docker compose --env-file .env.docker logs -f api web
 docker compose --env-file .env.docker down
 ```
 
-The test script runs quality checks and migration/integration tests in Docker against a separate `habit_test` database. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
+The seed command creates an isolated demo account with seven sample routines, recent check-ins, tasks, a goal, mindset ratings, and a monthly reflection. It prints its generated login details and stores them in ignored `.env.demo`. Reruns reuse existing named records and add missing samples; they do not modify other accounts. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
 
 For the optional read-only Claude Desktop MCP connector, build the Docker profile and follow [MCP setup](docs/mcp.md):
 
@@ -28,9 +28,9 @@ docker compose --env-file .env.docker --profile ai build mcp
 
 For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run db:migrate`, and `npm run dev` against a separately running PostgreSQL service.
 
-## Verification
+## Build checks
 
-Run `./scripts/docker-test.sh` for the complete local Docker check. Run `npm audit --audit-level=moderate` when the npm advisory endpoint is reachable. Integration tests use a separate migrated `habit_test` database and refuse to silently skip without a URL. CI tests Node 24 and a fresh PostgreSQL database, migration reruns, constraints, and quality gates.
+Run `npm run check` for formatting, lint, type checking, and builds. Run `npm audit --audit-level=moderate` when the npm advisory endpoint is reachable. Automated test files were removed at the product owner's request; CI now checks the build and dependency audit. Use the demo account for manual feature checks.
 
 ## Project map
 

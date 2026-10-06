@@ -20,15 +20,12 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --import tsx --test tests/*.test.ts",
-    "test:integration": "node --import tsx --test tests/*.integration.ts",
     "db:migrate": "node --import tsx scripts/migrate.ts",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "@types/node": "^24.0.0",
-    "axe-core": "^4.13.0",
     "concurrently": "^9.0.0",
     "eslint": "^9.0.0",
     "prettier": "^3.0.0",

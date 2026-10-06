@@ -1,8 +1,8 @@
 # Requirement traceability
 
-Status vocabulary: planned / implemented-unverified / verified. No product requirement is accepted until integration, tests and documentation establish it. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged.
+Status vocabulary: planned / implemented-unverified / verified. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged. The current manual-check workflow cannot provide the same regression confidence as the removed automated suite.
 
-Local Docker milestone (2026-10-06): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx, with an optional local MCP profile; `scripts/docker-up.sh` and `scripts/docker-test.sh` provide startup and in-container verification. The current suite passes 19 unit/foundation plus 21 PostgreSQL integration tests in Docker. This is partial evidence for B-500, B-527 and B-529; their broader production, seed-data and hot-reload requirements remain open.
+Local Docker milestone (2026-10-07): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx, with an optional local MCP profile. `scripts/docker-up.sh` starts the stack and `scripts/docker-seed.sh` creates manual-review data. The 19 unit and 21 integration tests that passed on 2026-10-06 were removed at the product owner's request. References to those tests below are historical evidence, not a current automated suite. Production and hot-reload requirements remain open.
 
 Expanded feature request (2026-10-06):
 

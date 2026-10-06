@@ -1,23 +1,10 @@
-name: Quality gates
+name: Build and audit
 on: [push, pull_request]
 permissions:
   contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_USER: habit
-          POSTGRES_PASSWORD: ci_only_password
-          POSTGRES_DB: habit_test
-        ports: [5432:5432]
-        options: --health-cmd "pg_isready -U habit -d habit_test" --health-interval 5s --health-timeout 3s --health-retries 10
-    env:
-      DATABASE_URL: postgresql://habit:ci_only_password@localhost:5432/habit_test
-      TEST_DATABASE_URL: postgresql://habit:ci_only_password@localhost:5432/habit_test
-      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,7 +13,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npm run db:migrate
-      - run: npm run db:migrate
-      - run: npm run test:integration
       - run: npm audit --audit-level=moderate
