@@ -10,7 +10,7 @@ Start the local stack with `./scripts/docker-up.sh`. Compose starts PostgreSQL, 
 
 ## Current deployment limits
 
-Dockerfile builds frontend assets, a migration image, a pruned API runtime image, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. CI is configured but has not run on a remote repository. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
+Dockerfile builds frontend assets, a migration image, a pruned API runtime image, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. GitHub CI passed the quality gates for commit `580f1e3` on the public repository. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
 
 ## Troubleshooting
 
