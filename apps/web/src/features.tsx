@@ -945,6 +945,11 @@ export function JournalPanel({
       setBusy(false);
     }
   }
+  function changeMonth(nextOffset: number) {
+    if (dirty && !window.confirm('Discard your unsaved reflection changes?'))
+      return;
+    setOffset(nextOffset);
+  }
   return (
     <section aria-labelledby="journal-title">
       <p className="eyebrow">REFLECTION</p>
@@ -963,13 +968,17 @@ export function JournalPanel({
           {readableDate(`${month}-01`, { month: 'long', year: 'numeric' })}
         </h3>
         <div className="habit-actions">
-          <button className="quiet" onClick={() => setOffset(offset - 1)}>
+          <button
+            className="quiet"
+            disabled={busy}
+            onClick={() => changeMonth(offset - 1)}
+          >
             Previous month
           </button>
           <button
             className="quiet"
-            disabled={offset >= 0}
-            onClick={() => setOffset(offset + 1)}
+            disabled={busy || offset >= 0}
+            onClick={() => changeMonth(offset + 1)}
           >
             Next month
           </button>
@@ -1150,9 +1159,10 @@ export function SettingsPanel({
       <div className="settings-card">
         <h3>Read-only assistant access</h3>
         <p>
-          Create a token for the local MCP connector. It can read your routines,
-          tasks, goals, insights, and journal; it cannot change them. Tokens
-          expire after 90 days and can be revoked here.
+          Create a token for the local MCP connector. It can read your today
+          dashboard, routine grid, tasks, goals, journal, and mindset entries;
+          it cannot change them. Tokens expire after 90 days and can be revoked
+          here.
         </p>
         <form onSubmit={createAssistantToken}>
           <label>
