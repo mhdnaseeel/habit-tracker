@@ -5,6 +5,7 @@ import { HistoryPanel, WeeklyProgress, type HistoryWeek } from './history.tsx';
 import {
   GoalPlanner,
   InsightsPanel,
+  ReportsPanel,
   JournalPanel,
   SettingsPanel,
   TaskTracker,
@@ -77,6 +78,7 @@ type View =
   | 'tasks'
   | 'goals'
   | 'insights'
+  | 'reports'
   | 'journal'
   | 'settings';
 class ApiError extends Error {
@@ -679,6 +681,13 @@ function App() {
               Today
             </button>
             <button
+              className={view === 'reports' ? 'active quiet' : 'quiet'}
+              aria-current={view === 'reports' ? 'page' : undefined}
+              onClick={() => showOther('reports')}
+            >
+              Reports
+            </button>
+            <button
               className={view === 'habits' ? 'active quiet' : 'quiet'}
               aria-current={view === 'habits' ? 'page' : undefined}
               onClick={() => void showHabits()}
@@ -1022,6 +1031,8 @@ function App() {
             <GoalPlanner api={request} />
           ) : view === 'insights' ? (
             <InsightsPanel api={request} />
+          ) : view === 'reports' ? (
+            <ReportsPanel api={request} />
           ) : view === 'journal' ? (
             today ? (
               <JournalPanel api={request} today={today.date} />

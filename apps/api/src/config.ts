@@ -14,6 +14,11 @@ export const configSchema = z
         'PostgreSQL URL required',
       ),
     ACCESS_TOKEN_SECRET: z.string().min(32).optional(),
+    OPENAI_API_KEY: z
+      .string()
+      .optional()
+      .transform((value) => value || undefined),
+    OPENAI_REPORT_MODEL: z.string().min(1).default('gpt-4.1-mini-2025-04-14'),
     DB_SSL: z
       .enum(['true', 'false'])
       .default('false')

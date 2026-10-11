@@ -75,6 +75,40 @@ type Insight = {
     lastWeek: number | null;
   }[];
 };
+type ReportOverview = {
+  date: string;
+  aiAvailable: boolean;
+  comparison: {
+    thisWeek: { completed: number; due: number; percentage: number | null };
+    sameDaysLastWeek: {
+      completed: number;
+      due: number;
+      percentage: number | null;
+    };
+  };
+  pendingHabits: { id: number; name: string }[];
+  pendingTasks: {
+    id: number;
+    title: string;
+    dueDate: string;
+    overdue: boolean;
+  }[];
+  morePendingTasks: boolean;
+  pendingGoalSteps: {
+    id: number;
+    title: string;
+    goal: string;
+    deadline: string | null;
+  }[];
+  morePendingGoalSteps: boolean;
+  slipping: {
+    id: number;
+    name: string;
+    thisWeek: number;
+    lastWeek: number;
+  }[];
+  focus: { label: string; reason: string }[];
+};
 
 function message(cause: unknown) {
   return cause instanceof Error ? cause.message : 'Request failed';
@@ -846,6 +880,240 @@ export function InsightsPanel({ api }: { api: ApiRequest }) {
           ) : (
             <p>No routines have scheduled check-ins in this range.</p>
           )}
+        </>
+      )}
+    </section>
+  );
+}
+
+export function ReportsPanel({ api }: { api: ApiRequest }) {
+  const [data, setData] = useState<ReportOverview | null>(null);
+  const [report, setReport] = useState('');
+  const [generatedAt, setGeneratedAt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function refresh() {
+    setError('');
+    try {
+      setData(await api<ReportOverview>('/api/v1/reports/overview'));
+      setReport('');
+      setGeneratedAt('');
+    } catch (cause) {
+      setError(message(cause));
+    }
+  }
+  useEffect(() => {
+    void refresh();
+  }, []);
+  async function generate() {
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api<{ report: string; generatedAt: string }>(
+        '/api/v1/reports/ai',
+        'POST',
+      );
+      setReport(result.report);
+      setGeneratedAt(result.generatedAt);
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  function download() {
+    if (!data) return;
+    const lines = [
+      `Habit Tracker report — ${data.date}`,
+      `This week: ${data.comparison.thisWeek.completed}/${data.comparison.thisWeek.due} (${percent(data.comparison.thisWeek.percentage)})`,
+      `Same days last week: ${data.comparison.sameDaysLastWeek.completed}/${data.comparison.sameDaysLastWeek.due} (${percent(data.comparison.sameDaysLastWeek.percentage)})`,
+      `Habits due today: ${data.pendingHabits.map((item) => item.name).join(', ') || 'None'}`,
+      `Pending tasks: ${data.pendingTasks.map((item) => `${item.title} (${item.dueDate})`).join(', ') || 'None'}`,
+      `Open goal steps: ${data.pendingGoalSteps.map((item) => `${item.goal}: ${item.title}`).join(', ') || 'None'}`,
+      `Suggested focus: ${data.focus.map((item) => `${item.label} — ${item.reason}`).join('; ') || 'Nothing urgent'}`,
+      report ? `AI guidance generated ${generatedAt}:\n${report}` : '',
+    ];
+    const url = URL.createObjectURL(
+      new Blob([lines.join('\n\n')], { type: 'text/plain' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `habit-report-${data.date}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+  return (
+    <section aria-labelledby="reports-title">
+      <p className="eyebrow">YOUR NEXT STEPS</p>
+      <h2 id="reports-title">Analysis reports</h2>
+      <p>
+        A current snapshot of what is due, what is pending, and where your
+        routine consistency changed. Refresh after check-ins or task updates.
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="habit-actions">
+        <button
+          className="quiet"
+          onClick={() => void refresh()}
+          disabled={busy}
+        >
+          Refresh analysis
+        </button>
+        <button className="quiet" onClick={download} disabled={!data}>
+          Download report
+        </button>
+      </div>
+      {!data ? (
+        <p>Loading your analysis…</p>
+      ) : (
+        <>
+          <div className="insight-summary">
+            <div>
+              <small>This week</small>
+              <strong>{percent(data.comparison.thisWeek.percentage)}</strong>
+              <span>
+                {data.comparison.thisWeek.completed}/
+                {data.comparison.thisWeek.due} scheduled check-ins
+              </span>
+            </div>
+            <div>
+              <small>Same days last week</small>
+              <strong>
+                {percent(data.comparison.sameDaysLastWeek.percentage)}
+              </strong>
+              <span>
+                {data.comparison.sameDaysLastWeek.completed}/
+                {data.comparison.sameDaysLastWeek.due} scheduled check-ins
+              </span>
+            </div>
+            <div>
+              <small>Needs attention</small>
+              <strong>
+                {data.pendingHabits.length + data.pendingTasks.length}
+                {data.morePendingTasks ? '+' : ''}
+              </strong>
+              <span>habits and due or overdue tasks</span>
+            </div>
+          </div>
+          <div className="settings-card">
+            <h3>What to focus on next</h3>
+            {data.focus.length ? (
+              <ol>
+                {data.focus.map((item, index) => (
+                  <li key={`${item.label}-${index}`}>
+                    <strong>{item.label}</strong> — {item.reason}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>
+                Nothing is currently due or overdue. Choose a small goal step
+                when you are ready.
+              </p>
+            )}
+          </div>
+          <div className="report-grid">
+            <div className="settings-card">
+              <h3>Habits due today</h3>
+              {data.pendingHabits.length ? (
+                <ul>
+                  {data.pendingHabits.map((item) => (
+                    <li key={item.id}>{item.name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>All scheduled habits are checked off.</p>
+              )}
+            </div>
+            <div className="settings-card">
+              <h3>Pending tasks</h3>
+              {data.pendingTasks.length ? (
+                <ul>
+                  {data.pendingTasks.map((item) => (
+                    <li key={item.id}>
+                      {item.title}{' '}
+                      <small>
+                        {item.overdue ? 'Overdue' : 'Due today'} ·{' '}
+                        {readableDate(item.dueDate, { dateStyle: 'medium' })}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No tasks are due or overdue.</p>
+              )}
+              {data.morePendingTasks && (
+                <p>Showing the first 30 pending tasks.</p>
+              )}
+            </div>
+            <div className="settings-card">
+              <h3>Open goal steps</h3>
+              {data.pendingGoalSteps.length ? (
+                <ul>
+                  {data.pendingGoalSteps.map((item) => (
+                    <li key={item.id}>
+                      {item.title}{' '}
+                      <small>
+                        for {item.goal}
+                        {item.deadline
+                          ? ` · ${readableDate(item.deadline, { dateStyle: 'medium' })}`
+                          : ''}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No open goal steps.</p>
+              )}
+              {data.morePendingGoalSteps && (
+                <p>Showing the first 30 goal steps.</p>
+              )}
+            </div>
+            <div className="settings-card">
+              <h3>Routines needing attention</h3>
+              {data.slipping.length ? (
+                <ul>
+                  {data.slipping.map((item) => (
+                    <li key={item.id}>
+                      {item.name}: {item.lastWeek}% → {item.thisWeek}%
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No week-over-week declines with comparable data.</p>
+              )}
+            </div>
+          </div>
+          <div className="settings-card">
+            <h3>AI guidance</h3>
+            <p>
+              Generate a short, account-specific suggestion when you want one.
+              This sends the report snapshot to OpenAI; it excludes journal
+              text, passwords, and tokens.
+            </p>
+            {data.aiAvailable ? (
+              <button onClick={() => void generate()} disabled={busy}>
+                {busy ? 'Generating…' : 'Generate AI report'}
+              </button>
+            ) : (
+              <p>
+                The server needs an OpenAI API key before AI guidance is
+                available. The analysis above works without it.
+              </p>
+            )}
+            {report && (
+              <div className="ai-report">
+                <small>
+                  Generated {new Date(generatedAt).toLocaleString()}
+                </small>
+                <p>{report}</p>
+              </div>
+            )}
+          </div>
         </>
       )}
     </section>

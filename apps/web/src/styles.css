@@ -488,6 +488,28 @@ input::placeholder {
 .insight-lists {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.report-grid .settings-card {
+  margin: 0;
+}
+.report-grid small {
+  display: block;
+  color: var(--muted);
+}
+.ai-report {
+  margin-top: 18px;
+  padding: 16px;
+  border-left: 4px solid var(--progress);
+  background: var(--bg);
+}
+.ai-report p {
+  white-space: pre-wrap;
+  margin-bottom: 0;
+}
 .trend-scroll {
   overflow-x: auto;
   padding: 14px;
@@ -672,6 +694,9 @@ footer {
   .mindset-fields,
   .insight-summary,
   .insight-lists {
+    grid-template-columns: 1fr;
+  }
+  .report-grid {
     grid-template-columns: 1fr;
   }
   .inline-form {

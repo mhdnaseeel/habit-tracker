@@ -12,6 +12,7 @@ import { registerHabits } from './habits.ts';
 import { registerTasks } from './tasks.ts';
 import { registerPlanner } from './planner.ts';
 import { registerInsights } from './insights.ts';
+import { registerReports } from './reports.ts';
 import { healthSchema } from '../../../packages/contracts/src/index.ts';
 
 export async function createApp(
@@ -139,6 +140,7 @@ export async function createApp(
     await registerTasks(app, pool, auth.requirePrincipal);
     await registerPlanner(app, pool, auth.requirePrincipal);
     await registerInsights(app, pool, auth.requirePrincipal);
+    await registerReports(app, pool, auth.requirePrincipal, config);
   }
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () =>
     app.swagger(),

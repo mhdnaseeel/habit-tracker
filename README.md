@@ -1,6 +1,6 @@
 # Habit Tracker
 
-A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The app now includes Today check-ins, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, monthly reflections, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. **The local feature flows are implemented and database-tested; public production deployment remains unverified.**
+A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The app now includes Today check-ins, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, monthly reflections, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. **Public production deployment remains unverified.**
 
 ## Run everything in Docker
 
@@ -26,6 +26,12 @@ For the optional read-only Claude Desktop MCP connector, build the Docker profil
 docker compose --env-file .env.docker --profile ai build mcp
 ```
 
+## Analysis reports
+
+Open **Reports** in the app for a current comparison, habits due today, pending and overdue tasks, open goal steps, routines that slipped, and a short priority list. This account-specific analysis works without an AI key. Use **Refresh analysis** after making changes and **Download report** to save a text copy.
+
+For optional **Generate AI report**, put a newly created OpenAI API key in the ignored `.env.docker` file as `OPENAI_API_KEY=...`, then run `./scripts/docker-up.sh` to recreate the API container. Do not put the key in the browser, `.env.example`, or Git. The API uses the server-side Responses API with `store: false` and sends only the report snapshot (counts and habit, task, and goal titles). The default model is `gpt-4.1-mini-2025-04-14`; set `OPENAI_REPORT_MODEL` in `.env.docker` to change it. AI reports are generated only when requested and are not saved in the database. If the key is absent or the API request fails, the non-AI report remains available.
+
 For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run db:migrate`, and `npm run dev` against a separately running PostgreSQL service.
 
 ## Build checks
@@ -35,7 +41,7 @@ Run `npm run check` for formatting, lint, type checking, and builds. Run `npm au
 ## Project map
 
 - `apps/web`: React/Vite frontend.
-- `apps/api`: Fastify API, authentication, owner-scoped habits/tasks/goals/insights and PostgreSQL transactions.
+- `apps/api`: Fastify API, authentication, owner-scoped habits/tasks/goals/insights/reports and PostgreSQL transactions.
 - `apps/mcp`: token-scoped, read-only local MCP server.
 - `packages/contracts`: shared schemas.
 - `packages/domain`: pure calendar, schedule, streak and metric functions.
