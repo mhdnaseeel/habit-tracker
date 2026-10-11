@@ -269,7 +269,34 @@ export async function registerReports(
           }),
           signal: AbortSignal.timeout(25_000),
         });
-        if (!response.ok) throw new Error(`OpenAI status ${response.status}`);
+        if (!response.ok) {
+          const details: unknown = await response.json().catch(() => null);
+          const code = (details as { error?: { code?: string } } | null)?.error
+            ?.code;
+          if (
+            code === 'credit_balance_exhausted' ||
+            code === 'insufficient_quota'
+          )
+            return reply.code(503).send({
+              success: false,
+              error: {
+                code: 503,
+                message:
+                  'OpenAI project credits are exhausted. Add credits or use a key from a funded project.',
+                requestId: request.id,
+              },
+            });
+          if (response.status === 401)
+            return reply.code(503).send({
+              success: false,
+              error: {
+                code: 503,
+                message: 'OpenAI rejected the configured API key.',
+                requestId: request.id,
+              },
+            });
+          throw new Error(`OpenAI status ${response.status}`);
+        }
         const payload: unknown = await response.json();
         const output = (
           payload as {

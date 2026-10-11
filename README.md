@@ -32,6 +32,8 @@ Open **Reports** in the app for a current comparison, habits due today, pending 
 
 For optional **Generate AI report**, put a newly created OpenAI API key in the ignored `.env.docker` file as `OPENAI_API_KEY=...`, then run `./scripts/docker-up.sh` to recreate the API container. Do not put the key in the browser, `.env.example`, or Git. The API uses the server-side Responses API with `store: false` and sends only the report snapshot (counts and habit, task, and goal titles). The default model is `gpt-4.1-mini-2025-04-14`; set `OPENAI_REPORT_MODEL` in `.env.docker` to change it. AI reports are generated only when requested and are not saved in the database. If the key is absent or the API request fails, the non-AI report remains available.
 
+If AI generation reports exhausted credits, check the OpenAI project linked to the key; running the app locally does not supply API credits. The Reports screen continues to work without AI generation.
+
 For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run db:migrate`, and `npm run dev` against a separately running PostgreSQL service.
 
 ## Build checks
