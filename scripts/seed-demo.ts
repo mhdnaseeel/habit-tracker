@@ -186,14 +186,13 @@ async function main() {
       focus: 3,
       motivation: 4,
     });
-  const month = today.slice(0, 7);
   const journal = await request<{ content: string; version: number | null }>(
-    `/api/v1/journal/${month}`,
+    `/api/v1/journal/${today}`,
   );
   if (!journal.content)
-    await request(`/api/v1/journal/${month}`, 'PUT', {
+    await request(`/api/v1/journal/${today}`, 'PUT', {
       content:
-        'I am noticing which small routines are easiest to return to. This month I want to make reading feel natural.',
+        'I am noticing which small routines are easiest to return to. Today I want to make reading feel natural.',
       version: journal.version,
     });
 

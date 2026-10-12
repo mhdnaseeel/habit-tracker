@@ -1,6 +1,6 @@
 # Living implementation checklist
 
-Updated 2026-10-07. The source PRDs remain unchanged. Later product-owner choices are recorded in ADR-0002 and ADR-0003. The product owner removed the browser-storage-copy feature and later requested removal of automated test files. Account data persists in PostgreSQL. The Docker seed command supplies a separate manual-review account. Browser accessibility and production deployment remain unverified.
+Updated 2026-10-12. The source PRDs remain unchanged. Later product-owner choices are recorded in ADR-0002 and ADR-0003. The product owner removed the browser-storage-copy feature and later requested removal of automated test files. Account data persists in PostgreSQL. The Docker seed command supplies a separate manual-review account. Browser accessibility and production deployment remain unverified.
 
 | Area                       | Current state                                                                                                                                                          | Remaining work                                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -9,7 +9,7 @@ Updated 2026-10-07. The source PRDs remain unchanged. Later product-owner choice
 | Habits                     | Owner-scoped create/edit/archive, categories, daily/weekly/monthly schedules, check-in/undo, one manual weekly freeze, streaks, Today ring and week/month history grid | Browser interaction and mobile accessibility QA; reminders                                    |
 | Tasks and mindset          | Weekly task lists and daily rings, copy yesterday idempotently, complete/undo/archive, daily 1–5 energy/focus/motivation                                               | Browser interaction QA; recurring tasks from broader PRD                                      |
 | Goals and insights         | 10-area goals, steps, deadlines, habit links, progress, consistency trends, strongest/slipping and personal leaderboard                                                | Browser interaction QA; broader numeric-goal PRD semantics                                    |
-| Monthly reflection and MCP | Version-checked monthly journal; revocable read-only local stdio MCP tools for account data                                                                            | Browser interaction QA; remote HTTPS MCP deployment if requested                              |
+| Daily journal and MCP      | Version-checked daily journal; revocable read-only local stdio MCP tools for account data                                                                              | Browser interaction QA; remote HTTPS MCP deployment if requested                              |
 | Release audit              | Open                                                                                                                                                                   | Full PRD acceptance, security/accessibility/performance tests, operations and live deployment |
 
 ## Verification evidence

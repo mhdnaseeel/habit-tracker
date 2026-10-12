@@ -1,6 +1,6 @@
 # Habit Tracker
 
-A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The app now includes Today check-ins, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, monthly reflections, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. **Public production deployment remains unverified.**
+A habit tracker under construction, driven by the two original PRDs and the product owner's later feature list. The app now includes Today check-ins, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, daily journal entries, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. **Public production deployment remains unverified.**
 
 ## Run everything in Docker
 
@@ -18,7 +18,7 @@ docker compose --env-file .env.docker logs -f api web
 docker compose --env-file .env.docker down
 ```
 
-The seed command creates an isolated demo account with seven sample routines, recent check-ins, tasks, a goal, mindset ratings, and a monthly reflection. It prints its generated login details and stores them in ignored `.env.demo`. Reruns reuse existing named records and add missing samples; they do not modify other accounts. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
+The seed command creates an isolated demo account with seven sample routines, recent check-ins, tasks, a goal, mindset ratings, and a daily journal entry. It prints its generated login details and stores them in ignored `.env.demo`. Reruns reuse existing named records and add missing samples; they do not modify other accounts. `down` keeps the named PostgreSQL volume. `down -v` deletes local database data. This Compose stack is for local development; it serves HTTP and does not meet production TLS, backup, or deployment requirements.
 
 For the optional read-only Claude Desktop MCP connector, build the Docker profile and follow [MCP setup](docs/mcp.md):
 

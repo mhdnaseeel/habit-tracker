@@ -59,9 +59,6 @@ const linkParams = z.object({
   habitId: z.coerce.number().int().positive(),
 });
 const dateParams = z.object({ date: dateSchema });
-const monthParams = z.object({
-  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-});
 const weekQuery = z
   .object({ from: dateSchema, to: dateSchema })
   .strict()
@@ -456,17 +453,17 @@ export async function registerPlanner(
     },
   );
   app.get(
-    '/api/v1/journal/:month',
+    '/api/v1/journal/:date',
     {
       schema: {
         tags: ['Journal'],
-        summary: 'Read an owned monthly reflection',
+        summary: 'Read an owned daily journal entry',
       },
     },
     async (request, reply) => {
       const user = await authenticate(request, reply);
       if (!user) return;
-      const params = parse(monthParams, request.params, reply, request);
+      const params = parse(dateParams, request.params, reply, request);
       if (!params) return;
       const row = (
         await pool.query<{
@@ -474,12 +471,12 @@ export async function registerPlanner(
           version: number;
           updated_at: Date;
         }>(
-          'SELECT content,version,updated_at FROM monthly_journal WHERE user_id=$1 AND month=$2',
-          [user.userId, `${params.month}-01`],
+          'SELECT content,version,updated_at FROM daily_journal WHERE user_id=$1 AND entry_date=$2',
+          [user.userId, params.date],
         )
       ).rows[0];
       return {
-        month: params.month,
+        date: params.date,
         content: row?.content ?? '',
         version: row?.version ?? null,
         updatedAt: row?.updated_at ?? null,
@@ -487,29 +484,29 @@ export async function registerPlanner(
     },
   );
   app.put(
-    '/api/v1/journal/:month',
+    '/api/v1/journal/:date',
     {
       schema: {
         tags: ['Journal'],
-        summary: 'Save an owned monthly reflection',
+        summary: 'Save an owned daily journal entry',
       },
     },
     async (request, reply) => {
       const user = await authenticate(request, reply);
       if (!user) return;
-      const params = parse(monthParams, request.params, reply, request);
+      const params = parse(dateParams, request.params, reply, request);
       if (!params) return;
       const input = parse(journalInput, request.body, reply, request);
       if (!input) return;
       const result =
         input.version === null
           ? await pool.query<{ version: number }>(
-              'INSERT INTO monthly_journal(user_id,month,content) VALUES($1,$2,$3) ON CONFLICT(user_id,month) DO NOTHING RETURNING version',
-              [user.userId, `${params.month}-01`, input.content],
+              'INSERT INTO daily_journal(user_id,entry_date,content) VALUES($1,$2,$3) ON CONFLICT(user_id,entry_date) DO NOTHING RETURNING version',
+              [user.userId, params.date, input.content],
             )
           : await pool.query<{ version: number }>(
-              'UPDATE monthly_journal SET content=$3,version=version+1,updated_at=now() WHERE user_id=$1 AND month=$2 AND version=$4 RETURNING version',
-              [user.userId, `${params.month}-01`, input.content, input.version],
+              'UPDATE daily_journal SET content=$3,version=version+1,updated_at=now() WHERE user_id=$1 AND entry_date=$2 AND version=$4 RETURNING version',
+              [user.userId, params.date, input.content, input.version],
             );
       const saved = result.rows[0];
       if (!saved)
@@ -518,30 +515,30 @@ export async function registerPlanner(
             'Reflection changed on another device. Reload before saving.',
         });
       return {
-        month: params.month,
+        date: params.date,
         content: input.content,
         version: saved.version,
       };
     },
   );
   app.delete(
-    '/api/v1/journal/:month',
+    '/api/v1/journal/:date',
     {
       schema: {
         tags: ['Journal'],
-        summary: 'Delete an owned monthly reflection',
+        summary: 'Delete an owned daily journal entry',
       },
     },
     async (request, reply) => {
       const user = await authenticate(request, reply);
       if (!user) return;
-      const params = parse(monthParams, request.params, reply, request);
+      const params = parse(dateParams, request.params, reply, request);
       if (!params) return;
       const input = parse(journalDelete, request.body, reply, request);
       if (!input) return;
       const result = await pool.query(
-        'DELETE FROM monthly_journal WHERE user_id=$1 AND month=$2 AND version=$3',
-        [user.userId, `${params.month}-01`, input.version],
+        'DELETE FROM daily_journal WHERE user_id=$1 AND entry_date=$2 AND version=$3',
+        [user.userId, params.date, input.version],
       );
       if (!result.rowCount)
         return reply.code(409).send({

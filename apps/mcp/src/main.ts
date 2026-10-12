@@ -448,25 +448,25 @@ server.registerTool(
 );
 
 server.registerTool(
-  'get_monthly_reflection',
+  'get_daily_reflection',
   {
-    title: 'Read monthly reflection',
-    description: 'Read one monthly journal entry. No changes are made.',
-    inputSchema: { month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) },
+    title: 'Read daily reflection',
+    description: 'Read one daily journal entry. No changes are made.',
+    inputSchema: { date: z.iso.date() },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: false,
     },
   },
-  async ({ month }) =>
+  async ({ date }) =>
     read(async (userId) => ({
-      month,
+      date,
       content:
         (
           await pool.query<{ content: string }>(
-            'SELECT content FROM monthly_journal WHERE user_id=$1 AND month=$2',
-            [userId, `${month}-01`],
+            'SELECT content FROM daily_journal WHERE user_id=$1 AND entry_date=$2',
+            [userId, date],
           )
         ).rows[0]?.content ?? null,
     })),

@@ -14,7 +14,7 @@ Expanded feature request (2026-10-06):
 | Weekly tasks    | Daily task rings, copy-yesterday receipt, mindset ratings; integration tests                       | Browser interaction QA pending                        |
 | Goals           | 10 areas, steps, deadlines, habit links, progress; integration tests                               | Area names beyond source examples are product choices |
 | Insights        | Consistency, comparable weeks, strongest/slipping, personal leaderboard, draggable trend; API test | Browser chart QA pending                              |
-| Monthly journal | Plain text month entries, version-checked edits/deletes; stale-write test                          | Browser interaction QA pending                        |
+| Daily journal   | Plain text date entries, version-checked edits/deletes; manual API check                           | Browser interaction QA pending                        |
 | AI/MCP          | Read-only local stdio server, token scope/revocation; real SDK client integration test             | Remote Claude.ai connector not deployed               |
 | Account/data    | DB-backed account, focus refresh, export and password-confirmed deletion; API tests                | Production backup erasure unverified                  |
 

@@ -1,6 +1,6 @@
 # Read-only MCP connector
 
-The local MCP server lets Claude Desktop or another local MCP client read one Habit Tracker account. It exposes seven read-only tools: today's dashboard, routines, a date-limited habit grid, tasks, goals, monthly reflection and mindset entries. It has no mutation tools. Each tool checks the token again, so revocation takes effect on the next call.
+The local MCP server lets Claude Desktop or another local MCP client read one Habit Tracker account. It exposes seven read-only tools: today's dashboard, routines, a date-limited habit grid, tasks, goals, a daily journal entry and mindset entries. It has no mutation tools. Each tool checks the token again, so revocation takes effect on the next call.
 
 1. Start the Docker stack with `./scripts/docker-up.sh` and build the optional connector with `docker compose --env-file .env.docker --profile ai build mcp`.
 2. In Habit Tracker, open **Settings → Read-only assistant access**. Enter a label and your account password, create a token, and copy it immediately. The token is shown only once, expires after 90 days and can be revoked in Settings. Do not commit it to Git.

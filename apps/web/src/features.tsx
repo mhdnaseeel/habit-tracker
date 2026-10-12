@@ -8,7 +8,6 @@ import {
 } from 'react';
 import {
   addCalendarDays,
-  monthRange,
   readableDate,
   weekDates,
   weekRange,
@@ -1127,18 +1126,20 @@ export function JournalPanel({
   api: ApiRequest;
   today: string;
 }) {
-  const [offset, setOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(today);
   const [content, setContent] = useState('');
   const [version, setVersion] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const month = monthRange(today, offset).from.slice(0, 7);
   useEffect(() => {
     let live = true;
+    setLoading(true);
+    setError('');
     void api<{ content: string; version: number | null }>(
-      `/api/v1/journal/${month}`,
+      `/api/v1/journal/${selectedDate}`,
     )
       .then((result) => {
         if (live) {
@@ -1146,21 +1147,25 @@ export function JournalPanel({
           setVersion(result.version);
           setDirty(false);
           setSaved(Boolean(result.content));
+          setLoading(false);
         }
       })
       .catch((cause) => {
-        if (live) setError(message(cause));
+        if (live) {
+          setError(message(cause));
+          setLoading(false);
+        }
       });
     return () => {
       live = false;
     };
-  }, [month]);
+  }, [selectedDate]);
   useEffect(() => {
     if (dirty) return;
     let live = true;
     const refresh = () => {
       void api<{ content: string; version: number | null }>(
-        `/api/v1/journal/${month}`,
+        `/api/v1/journal/${selectedDate}`,
       )
         .then((result) => {
           if (!live) return;
@@ -1177,14 +1182,14 @@ export function JournalPanel({
       live = false;
       window.removeEventListener('focus', refresh);
     };
-  }, [month, dirty]);
+  }, [selectedDate, dirty]);
   async function save(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError('');
     try {
       const result = await api<{ version: number }>(
-        `/api/v1/journal/${month}`,
+        `/api/v1/journal/${selectedDate}`,
         'PUT',
         { content, version },
       );
@@ -1198,11 +1203,11 @@ export function JournalPanel({
     }
   }
   async function remove() {
-    if (!window.confirm('Delete this monthly reflection?')) return;
+    if (!window.confirm('Delete this daily journal entry?')) return;
     setBusy(true);
     setError('');
     try {
-      await api(`/api/v1/journal/${month}`, 'DELETE', { version });
+      await api(`/api/v1/journal/${selectedDate}`, 'DELETE', { version });
       setContent('');
       setVersion(null);
       setDirty(false);
@@ -1213,15 +1218,25 @@ export function JournalPanel({
       setBusy(false);
     }
   }
-  function changeMonth(nextOffset: number) {
+  function changeDate(nextDate: string) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(nextDate) ||
+      nextDate === selectedDate ||
+      nextDate > today
+    )
+      return;
     if (dirty && !window.confirm('Discard your unsaved reflection changes?'))
       return;
-    setOffset(nextOffset);
+    setContent('');
+    setVersion(null);
+    setSaved(false);
+    setDirty(false);
+    setSelectedDate(nextDate);
   }
   return (
     <section aria-labelledby="journal-title">
       <p className="eyebrow">REFLECTION</p>
-      <h2 id="journal-title">Monthly journal</h2>
+      <h2 id="journal-title">Daily journal</h2>
       <p>
         A quiet place to note what worked, what was difficult, and what you want
         to carry forward.
@@ -1232,26 +1247,34 @@ export function JournalPanel({
         </p>
       )}
       <div className="section-head">
-        <h3>
-          {readableDate(`${month}-01`, { month: 'long', year: 'numeric' })}
-        </h3>
+        <h3>{readableDate(selectedDate, { dateStyle: 'full' })}</h3>
         <div className="habit-actions">
           <button
             className="quiet"
-            disabled={busy}
-            onClick={() => changeMonth(offset - 1)}
+            disabled={busy || loading}
+            onClick={() => changeDate(addCalendarDays(selectedDate, -1))}
           >
-            Previous month
+            Previous day
           </button>
           <button
             className="quiet"
-            disabled={busy || offset >= 0}
-            onClick={() => changeMonth(offset + 1)}
+            disabled={busy || loading || selectedDate >= today}
+            onClick={() => changeDate(addCalendarDays(selectedDate, 1))}
           >
-            Next month
+            Next day
           </button>
         </div>
       </div>
+      <label className="journal-date">
+        Choose a day
+        <input
+          type="date"
+          max={today}
+          value={selectedDate}
+          disabled={busy || loading}
+          onChange={(event) => changeDate(event.target.value)}
+        />
+      </label>
       <form className="create journal-form" onSubmit={save}>
         <label>
           Your reflection
@@ -1260,6 +1283,7 @@ export function JournalPanel({
             maxLength={20000}
             rows={12}
             value={content}
+            disabled={busy || loading}
             onChange={(event) => {
               setContent(event.target.value);
               setDirty(true);
@@ -1267,12 +1291,12 @@ export function JournalPanel({
           />
         </label>
         <div className="habit-actions">
-          <button disabled={busy || !dirty}>Save reflection</button>
+          <button disabled={busy || loading || !dirty}>Save reflection</button>
           {saved && (
             <button
               type="button"
               className="quiet"
-              disabled={busy}
+              disabled={busy || loading}
               onClick={() => void remove()}
             >
               Delete reflection

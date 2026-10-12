@@ -564,6 +564,13 @@ input::placeholder {
 .journal-form {
   max-width: none;
 }
+.journal-date {
+  display: grid;
+  gap: 6px;
+  max-width: 240px;
+  margin: 16px 0;
+  font-weight: 600;
+}
 .settings-card {
   max-width: 600px;
 }

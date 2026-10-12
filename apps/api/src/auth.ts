@@ -536,7 +536,7 @@ export async function registerAuth(
           goals: `SELECT id,title,description,category,target,unit,start_date,deadline,completed_at,archived_at,created_at,updated_at FROM goals WHERE user_id=$1 ORDER BY id`,
           goalSteps: `SELECT id,goal_id,title,completed_at,sort_order,created_at FROM goal_steps WHERE user_id=$1 ORDER BY goal_id,sort_order,id`,
           goalHabits: `SELECT goal_id,habit_id,linked_on,unlinked_on FROM goal_habits WHERE user_id=$1 ORDER BY goal_id,habit_id`,
-          journal: `SELECT month,content,updated_at FROM monthly_journal WHERE user_id=$1 ORDER BY month`,
+          journal: `SELECT entry_date AS date,content,updated_at FROM daily_journal WHERE user_id=$1 ORDER BY entry_date`,
           reflections: `SELECT date,habit_id,task_id,content,mood,created_at,updated_at FROM reflections WHERE user_id=$1 ORDER BY date,id`,
           assistantTokens: `SELECT id,label,created_at,expires_at,revoked_at FROM mcp_read_tokens WHERE user_id=$1 ORDER BY created_at`,
         } as const;
