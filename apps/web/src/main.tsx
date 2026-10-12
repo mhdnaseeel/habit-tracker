@@ -119,7 +119,7 @@ function App() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'login' | 'signup'>('signup');
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -141,14 +141,23 @@ function App() {
   function refresh(): Promise<AuthResponse> {
     if (!refreshFlight.current) {
       refreshFlight.current = (async () => {
-        const response = await fetch('/api/v1/refresh', {
-          method: 'POST',
-          credentials: 'same-origin',
-        });
-        const data = await decode<AuthResponse>(response);
-        token.current = data.token.accessToken;
-        setUser(data.user);
-        return data;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const response = await fetch('/api/v1/refresh', {
+            method: 'POST',
+            credentials: 'same-origin',
+          });
+          if (response.status === 409 && attempt < 4) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 150 * (attempt + 1)),
+            );
+            continue;
+          }
+          const data = await decode<AuthResponse>(response);
+          token.current = data.token.accessToken;
+          setUser(data.user);
+          return data;
+        }
+        throw new ApiError(409, 'Session refresh could not complete');
       })().finally(() => {
         refreshFlight.current = null;
       });

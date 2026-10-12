@@ -60,6 +60,7 @@ interface SessionRow {
   family_id: string;
   refresh_hash: string;
   revoked_at: Date | null;
+  replaced_by: string | null;
   expires_at: Date;
   device_id: string | null;
   ip_address: string | null;
@@ -210,7 +211,7 @@ export async function registerAuth(
         user_id: string;
         role: 'user' | 'admin';
       }>(
-        `SELECT s.user_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.user_id=$2 AND s.revoked_at IS NULL AND s.expires_at>now()`,
+        `SELECT s.user_id,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=$1 AND s.user_id=$2 AND (s.revoked_at IS NULL OR (s.replaced_by IS NOT NULL AND s.revoked_at>now()-interval '5 seconds' AND EXISTS (SELECT 1 FROM sessions active WHERE active.family_id=s.family_id AND active.revoked_at IS NULL AND active.expires_at>now()))) AND s.expires_at>now()`,
         [sid.data, id.data],
       );
       const row = session.rows[0];
@@ -385,6 +386,8 @@ export async function registerAuth(
         const old = found.rows[0];
         if (!old) return { kind: 'invalid' as const };
         if (old.revoked_at) {
+          if (old.replaced_by && Date.now() - old.revoked_at.getTime() < 5_000)
+            return { kind: 'racing' as const };
           await client.query(
             `UPDATE sessions SET revoked_at=now() WHERE family_id=$1 AND revoked_at IS NULL`,
             [old.family_id],
@@ -417,6 +420,8 @@ export async function registerAuth(
         );
         return { kind: 'ok' as const, user, sid };
       });
+      if (outcome.kind === 'racing')
+        return error(reply, request, 409, 'Session refresh is in progress');
       if (outcome.kind !== 'ok') {
         clearRefresh(reply, config);
         return error(reply, request, 401, 'Session expired');
@@ -439,7 +444,7 @@ export async function registerAuth(
       const found = await requirePrincipal(request, reply);
       if (!found) return;
       await pool.query(
-        `UPDATE sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2`,
+        `UPDATE sessions SET revoked_at=now() WHERE family_id=(SELECT family_id FROM sessions WHERE id=$1 AND user_id=$2) AND revoked_at IS NULL`,
         [found.sessionId, found.userId],
       );
       clearRefresh(reply, config);
