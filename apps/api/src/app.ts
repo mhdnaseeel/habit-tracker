@@ -4,7 +4,9 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import fastifyStatic from '@fastify/static';
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import type { Config } from './config.ts';
 import type pg from 'pg';
 import { registerAuth } from './auth.ts';
@@ -145,5 +147,10 @@ export async function createApp(
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () =>
     app.swagger(),
   );
+  if (config.HOSTED)
+    await app.register(fastifyStatic, {
+      root: join(process.cwd(), 'apps/web/dist'),
+      wildcard: false,
+    });
   return app;
 }

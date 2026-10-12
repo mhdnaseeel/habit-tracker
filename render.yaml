@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: habit-tracker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health/ready
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: HOSTED
+        value: 'true'
+      - key: DB_SSL
+        value: 'true'
+      - key: DATABASE_URL
+        sync: false
+      - key: ACCESS_TOKEN_SECRET
+        generateValue: true

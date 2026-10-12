@@ -7,6 +7,10 @@ export const configSchema = z
     HOST: z.string().default('127.0.0.1'),
     PORT: z.coerce.number().int().min(1).max(65535).default(3001),
     WEB_ORIGIN: z.url().default('http://127.0.0.1:5173'),
+    HOSTED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     DATABASE_URL: z
       .url()
       .refine(
@@ -42,7 +46,10 @@ export const configSchema = z
   });
 export type Config = z.infer<typeof configSchema>;
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const result = configSchema.safeParse(env);
+  const result = configSchema.safeParse({
+    ...env,
+    WEB_ORIGIN: env.WEB_ORIGIN ?? env.RENDER_EXTERNAL_URL,
+  });
   if (!result.success)
     throw new Error(
       `Invalid configuration: ${result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,

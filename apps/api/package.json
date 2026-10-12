@@ -12,6 +12,7 @@
     "@fastify/cors": "^11.0.0",
     "@fastify/helmet": "^13.0.0",
     "@fastify/rate-limit": "^10.0.0",
+    "@fastify/static": "^10.1.6",
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^6.1.1",
     "argon2": "^0.45.1",

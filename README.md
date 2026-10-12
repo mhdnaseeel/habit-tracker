@@ -26,6 +26,10 @@ For the optional read-only Claude Desktop MCP connector, build the Docker profil
 docker compose --env-file .env.docker --profile ai build mcp
 ```
 
+## Host a free preview
+
+The repository includes a [Render Blueprint and Neon setup guide](docs/deploy-free.md). It builds the `hosted` Docker target, serving the frontend and API from one HTTPS origin and applying PostgreSQL migrations at startup. Local account data is not copied to the cloud automatically. Render Free sleeps when idle; Neon Free has database limits; optional OpenAI AI reports require separate credits.
+
 ## Analysis reports
 
 Open **Reports** in the app for a current comparison, habits due today, pending and overdue tasks, open goal steps, routines that slipped, and a short priority list. This account-specific analysis works without an AI key. Use **Refresh analysis** after making changes and **Download report** to save a text copy.
@@ -54,4 +58,4 @@ Run `npm run check` for formatting, lint, type checking, and builds. Run `npm au
 - `docs/implementation.md`: phase status and remaining work.
 - `docs/traceability.md`: requirement-level acceptance tracking.
 
-See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. The source is in the [public GitHub repository](https://github.com/mhdnaseeel/habit-tracker). No cloud deployment or paid provider account is configured.
+See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. The source is in the [public GitHub repository](https://github.com/mhdnaseeel/habit-tracker). Cloud deployment configuration is prepared, but no live service has been verified yet.

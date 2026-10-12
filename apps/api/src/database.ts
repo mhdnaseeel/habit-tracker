@@ -2,8 +2,13 @@ import pg from 'pg';
 import type { Config } from './config.ts';
 pg.types.setTypeParser(1082, (value) => value);
 export function createPool(config: Config) {
+  const url = new URL(config.DATABASE_URL);
+  if (config.DB_SSL) {
+    for (const parameter of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert'])
+      url.searchParams.delete(parameter);
+  }
   return new pg.Pool({
-    connectionString: config.DATABASE_URL,
+    connectionString: url.toString(),
     max: 10,
     connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 30000,
