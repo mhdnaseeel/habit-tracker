@@ -58,4 +58,4 @@ Run `npm run check` for formatting, lint, type checking, and builds. Run `npm au
 - `docs/implementation.md`: phase status and remaining work.
 - `docs/traceability.md`: requirement-level acceptance tracking.
 
-See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. The source is in the [public GitHub repository](https://github.com/mhdnaseeel/habit-tracker). Cloud deployment configuration is prepared, but no live service has been verified yet.
+See [architecture](docs/architecture.md), [operations](docs/operations.md), [implementation status](docs/implementation.md), and the unchanged PRDs for scope. The source is in the [public GitHub repository](https://github.com/mhdnaseeel/habit-tracker), and the hosted app is at [habit-tracker-xard.onrender.com](https://habit-tracker-xard.onrender.com/).
