@@ -3,6 +3,7 @@ services:
     name: habit-tracker
     runtime: docker
     plan: free
+    region: singapore
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health/ready
     envVars:
