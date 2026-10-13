@@ -28,13 +28,13 @@ docker compose --env-file .env.docker --profile ai build mcp
 
 ## Host a free preview
 
-The repository includes a [Render Blueprint and Neon setup guide](docs/deploy-free.md). It builds the `hosted` Docker target, serving the frontend and API from one HTTPS origin and applying PostgreSQL migrations at startup. Local account data is not copied to the cloud automatically. Render Free sleeps when idle; Neon Free has database limits; optional OpenAI AI reports require separate credits.
+The repository includes a [Render Blueprint and Neon setup guide](docs/deploy-free.md). It builds the `hosted` Docker target, serving the frontend and API from one HTTPS origin and applying PostgreSQL migrations at startup. Local account data is not copied to the cloud automatically. Render Free sleeps when idle; Neon Free has database limits; optional AI Suggestions prioritization requires separate OpenAI API credits.
 
 ## Analysis reports
 
 Open **Reports** in the app for a current comparison, habits due today, pending and overdue tasks, open goal steps, routines that slipped, and a short priority list. This account-specific analysis works without an AI key. Use **Refresh analysis** after making changes and **Download report** to save a text copy.
 
-For optional **Generate AI report**, put a newly created OpenAI API key in the ignored `.env.docker` file as `OPENAI_API_KEY=...`, then run `./scripts/docker-up.sh` to recreate the API container. Do not put the key in the browser, `.env.example`, or Git. The API uses the server-side Responses API with `store: false` and sends only the report snapshot (counts and habit, task, and goal titles). The default model is `gpt-4.1-mini-2025-04-14`; set `OPENAI_REPORT_MODEL` in `.env.docker` to change it. AI reports are generated only when requested and are not saved in the database. If the key is absent or the API request fails, the non-AI report remains available.
+For optional **AI Suggestions** prioritization, put a newly created OpenAI API key in the ignored `.env.docker` file as `OPENAI_API_KEY=...`, then run `./scripts/docker-up.sh` to recreate the API container. Do not put the key in the browser, `.env.example`, or Git. The API uses the server-side Responses API with `store: false` and sends only grounded candidate actions and week totals. The model chooses candidate IDs; it cannot add unsupported actions. The default model is `gpt-4.1-mini-2025-04-14`; set `OPENAI_REPORT_MODEL` in `.env.docker` to change it. Data-based suggestions remain available without API credits.
 
 If AI generation reports exhausted credits, check the OpenAI project linked to the key; running the app locally does not supply API credits. The Reports screen continues to work without AI generation.
 

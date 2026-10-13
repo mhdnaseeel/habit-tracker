@@ -103,6 +103,8 @@ function App() {
   const token = useRef<string | null>(null);
   const refreshFlight = useRef<Promise<AuthResponse> | null>(null);
   const formHeading = useRef<HTMLHeadingElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const navigation = useRef<HTMLElement>(null);
   const [user, setUser] = useState<User | null>(null);
   const [today, setToday] = useState<Today | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -115,6 +117,7 @@ function App() {
   const [carryOver, setCarryOver] = useState(true);
   const [showTaskCreate, setShowTaskCreate] = useState(false);
   const [view, setView] = useState<View>('today');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -138,6 +141,29 @@ function App() {
   useEffect(() => {
     if (showCreate) formHeading.current?.focus();
   }, [showCreate, editingHabit]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    navigation.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButton.current?.focus();
+    };
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !navigation.current?.contains(event.target) &&
+        !menuButton.current?.contains(event.target)
+      )
+        setMenuOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOutside);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOutside);
+    };
+  }, [menuOpen]);
   function refresh(): Promise<AuthResponse> {
     if (!refreshFlight.current) {
       refreshFlight.current = (async () => {
@@ -571,6 +597,26 @@ function App() {
     setView('today');
     setNotice('Your account was deleted.');
   }
+  function navigate(next: View) {
+    setMenuOpen(false);
+    if (next === 'habits') void showHabits();
+    else if (next === 'history') showHistory();
+    else if (next === 'today') {
+      closeHabitForm();
+      setView('today');
+    } else showOther(next);
+  }
+  const sections: { view: View; label: string }[] = [
+    { view: 'today', label: 'Today' },
+    { view: 'reports', label: 'Reports' },
+    { view: 'habits', label: 'Habits' },
+    { view: 'history', label: 'History' },
+    { view: 'tasks', label: 'Tasks' },
+    { view: 'goals', label: 'Goals' },
+    { view: 'insights', label: 'Insights' },
+    { view: 'journal', label: 'Journal' },
+    { view: 'settings', label: 'Settings' },
+  ];
   const dateLabel = today
     ? new Intl.DateTimeFormat('en-IN', {
         dateStyle: 'full',
@@ -585,9 +631,29 @@ function App() {
           <h1>{user ? 'Your routines' : 'A calm place for your routines'}</h1>
         </div>
         {user && (
-          <button className="quiet" onClick={signOut} disabled={busy}>
-            Sign out
-          </button>
+          <div className="header-actions">
+            <button
+              ref={menuButton}
+              className="quiet menu-toggle"
+              type="button"
+              aria-controls="app-navigation"
+              aria-expanded={menuOpen}
+              aria-label={
+                menuOpen ? 'Close navigation menu' : 'Open navigation menu'
+              }
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <span aria-hidden="true">☰</span>
+              <span>Menu</span>
+            </button>
+            <button
+              className="quiet desktop-signout"
+              onClick={signOut}
+              disabled={busy}
+            >
+              Sign out
+            </button>
+          </div>
         )}
       </header>
       {notice && (
@@ -678,72 +744,31 @@ function App() {
         </section>
       ) : (
         <>
-          <nav aria-label="Available sections">
+          <nav
+            id="app-navigation"
+            ref={navigation}
+            className={`app-nav${menuOpen ? ' nav-open' : ''}`}
+            aria-label="Available sections"
+          >
+            {sections.map((section) => (
+              <button
+                key={section.view}
+                className={view === section.view ? 'active quiet' : 'quiet'}
+                aria-current={view === section.view ? 'page' : undefined}
+                onClick={() => navigate(section.view)}
+              >
+                {section.label}
+              </button>
+            ))}
             <button
-              className={view === 'today' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'today' ? 'page' : undefined}
+              className="quiet mobile-signout"
               onClick={() => {
-                closeHabitForm();
-                setView('today');
+                setMenuOpen(false);
+                void signOut();
               }}
+              disabled={busy}
             >
-              Today
-            </button>
-            <button
-              className={view === 'reports' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'reports' ? 'page' : undefined}
-              onClick={() => showOther('reports')}
-            >
-              Reports
-            </button>
-            <button
-              className={view === 'habits' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'habits' ? 'page' : undefined}
-              onClick={() => void showHabits()}
-            >
-              Habits
-            </button>
-            <button
-              className={view === 'history' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'history' ? 'page' : undefined}
-              onClick={showHistory}
-            >
-              History
-            </button>
-            <button
-              className={view === 'tasks' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'tasks' ? 'page' : undefined}
-              onClick={() => showOther('tasks')}
-            >
-              Tasks
-            </button>
-            <button
-              className={view === 'goals' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'goals' ? 'page' : undefined}
-              onClick={() => showOther('goals')}
-            >
-              Goals
-            </button>
-            <button
-              className={view === 'insights' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'insights' ? 'page' : undefined}
-              onClick={() => showOther('insights')}
-            >
-              Insights
-            </button>
-            <button
-              className={view === 'journal' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'journal' ? 'page' : undefined}
-              onClick={() => showOther('journal')}
-            >
-              Journal
-            </button>
-            <button
-              className={view === 'settings' ? 'active quiet' : 'quiet'}
-              aria-current={view === 'settings' ? 'page' : undefined}
-              onClick={() => showOther('settings')}
-            >
-              Settings
+              Sign out
             </button>
           </nav>
           {view === 'today' ? (

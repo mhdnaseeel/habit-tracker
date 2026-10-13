@@ -22,6 +22,11 @@
 body {
   margin: 0;
 }
+img,
+svg,
+canvas {
+  max-width: 100%;
+}
 button,
 input,
 select,
@@ -61,10 +66,18 @@ select:focus-visible {
   outline-offset: 3px;
 }
 .shell {
+  width: 100%;
   max-width: 980px;
   min-height: 100vh;
-  padding: 24px 20px 80px;
+  padding: 20px 16px 64px;
   margin: auto;
+}
+.shell > *,
+section,
+.settings-card,
+.goal-card,
+.mindset-card {
+  min-width: 0;
 }
 .header,
 .section-head {
@@ -102,6 +115,15 @@ nav {
   border-bottom: 1px solid var(--border);
   padding: 16px 0;
   margin-bottom: 26px;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.menu-toggle,
+.mobile-signout {
+  display: none;
 }
 section {
   margin: 24px 0;
@@ -197,6 +219,9 @@ input::placeholder {
   gap: 12px;
   align-items: center;
   border-bottom: 1px solid var(--border);
+}
+.habit-row > * {
+  min-width: 0;
 }
 .dot {
   width: 12px;
@@ -443,6 +468,10 @@ input::placeholder {
   align-items: center;
   gap: 8px;
 }
+.step-list label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .step-list input {
   width: 20px;
   min-height: 20px;
@@ -500,15 +529,56 @@ input::placeholder {
   display: block;
   color: var(--muted);
 }
-.ai-report {
-  margin-top: 18px;
-  padding: 16px;
-  border-left: 4px solid var(--progress);
+.ai-suggestions {
+  max-width: none;
+}
+.suggestion-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.suggestion-context > div {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 10px;
   background: var(--bg);
 }
-.ai-report p {
-  white-space: pre-wrap;
-  margin-bottom: 0;
+.suggestion-context h4,
+.ai-suggestions > h4 {
+  margin: 0 0 6px;
+}
+.suggestion-context p {
+  margin: 0;
+}
+.suggestion-list {
+  display: grid;
+  gap: 12px;
+  padding-left: 24px;
+}
+.suggestion-list li {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.suggestion-list strong {
+  display: block;
+}
+.suggestion-list p {
+  margin: 5px 0 0;
+}
+.suggestion-area {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.suggestion-timestamp {
+  font-size: 13px;
 }
 .trend-scroll {
   overflow-x: auto;
@@ -631,6 +701,9 @@ input::placeholder {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.habit-actions button {
+  min-width: 0;
+}
 .add {
   margin-top: 18px;
 }
@@ -673,7 +746,17 @@ footer {
     align-items: flex-start;
   }
   .habit-actions {
-    max-width: 140px;
+    max-width: 100%;
+    justify-content: flex-start;
+  }
+  .habit-row {
+    flex-wrap: wrap;
+  }
+  .habit-row .habit-copy {
+    flex-basis: calc(100% - 30px);
+  }
+  .habit-row .habit-actions {
+    margin-left: 24px;
   }
   .header {
     align-items: flex-start;
@@ -706,6 +789,26 @@ footer {
   .report-grid {
     grid-template-columns: 1fr;
   }
+  .suggestion-context {
+    grid-template-columns: 1fr;
+  }
+  .section-head {
+    flex-wrap: wrap;
+  }
+  .section-head > button {
+    max-width: 100%;
+  }
+  .token-list li,
+  .step-list li {
+    flex-wrap: wrap;
+  }
+  .leaderboard span {
+    min-width: 0;
+  }
+  .leaderboard small {
+    display: block;
+    margin-left: 0;
+  }
   .inline-form {
     align-items: stretch;
     flex-direction: column;
@@ -725,7 +828,7 @@ footer {
     padding-left: 254px;
     padding-right: 32px;
   }
-  nav {
+  .app-nav {
     position: fixed;
     inset: 0 auto 0 0;
     width: 216px;
@@ -739,44 +842,71 @@ footer {
     background: var(--sidebar);
     border: 0;
   }
-  nav button.quiet {
+  .app-nav button.quiet {
     text-align: left;
     color: var(--bg);
     border-color: transparent;
   }
-  nav button.active {
+  .app-nav button.active {
     background: var(--accent);
     color: #121212;
     border-color: var(--accent);
   }
 }
 @media (max-width: 800px) {
-  .shell {
-    padding-bottom: 104px;
+  .menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
   }
-  nav {
-    position: fixed;
-    inset: auto 0 0;
+  .desktop-signout {
+    display: none;
+  }
+  .app-nav {
+    display: none;
+    position: relative;
     z-index: 2;
-    display: flex;
-    justify-content: flex-start;
-    overflow-x: auto;
-    margin: 0;
-    padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+    flex-direction: column;
+    gap: 4px;
+    margin: 12px 0 20px;
+    padding: 12px;
     background: var(--sidebar);
     border: 0;
+    border-radius: 12px;
   }
-  nav button.quiet {
-    flex: 0 0 auto;
-    min-width: 72px;
-    padding: 8px;
-    white-space: nowrap;
+  .app-nav.nav-open {
+    display: flex;
+  }
+  .app-nav button.quiet {
+    width: 100%;
+    text-align: left;
     color: var(--bg);
     border-color: transparent;
   }
-  nav button.active {
+  .app-nav button.active {
     background: var(--accent);
     color: #121212;
     border-color: var(--accent);
+  }
+  .app-nav .mobile-signout {
+    display: block;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+  .insight-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .insight-summary,
+  .insight-lists,
+  .report-grid {
+    grid-template-columns: 1fr;
+  }
+  .header h1 {
+    font-size: clamp(22px, 6vw, 30px);
+  }
+  .menu-toggle {
+    padding-inline: 10px;
   }
 }

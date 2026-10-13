@@ -107,6 +107,19 @@ type ReportOverview = {
     lastWeek: number;
   }[];
   focus: { label: string; reason: string }[];
+  suggestions: {
+    priorities: Suggestion[];
+    strength: string | null;
+    improvement: string | null;
+    insufficientData: boolean;
+  };
+};
+type Suggestion = {
+  id: string;
+  area: 'Habit' | 'Task' | 'Goal';
+  title: string;
+  evidence: string;
+  action: string;
 };
 
 function message(cause: unknown) {
@@ -887,18 +900,24 @@ export function InsightsPanel({ api }: { api: ApiRequest }) {
 
 export function ReportsPanel({ api }: { api: ApiRequest }) {
   const [data, setData] = useState<ReportOverview | null>(null);
-  const [report, setReport] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<Suggestion[] | null>(null);
   const [generatedAt, setGeneratedAt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [aiError, setAiError] = useState('');
   async function refresh() {
+    setLoading(true);
     setError('');
+    setAiError('');
     try {
       setData(await api<ReportOverview>('/api/v1/reports/overview'));
-      setReport('');
+      setAiSuggestions(null);
       setGeneratedAt('');
     } catch (cause) {
       setError(message(cause));
+    } finally {
+      setLoading(false);
     }
   }
   useEffect(() => {
@@ -906,16 +925,16 @@ export function ReportsPanel({ api }: { api: ApiRequest }) {
   }, []);
   async function generate() {
     setBusy(true);
-    setError('');
+    setAiError('');
     try {
-      const result = await api<{ report: string; generatedAt: string }>(
-        '/api/v1/reports/ai',
-        'POST',
-      );
-      setReport(result.report);
+      const result = await api<{
+        suggestions: { priorities: Suggestion[] };
+        generatedAt: string;
+      }>('/api/v1/reports/ai', 'POST');
+      setAiSuggestions(result.suggestions.priorities);
       setGeneratedAt(result.generatedAt);
     } catch (cause) {
-      setError(message(cause));
+      setAiError(message(cause));
     } finally {
       setBusy(false);
     }
@@ -930,7 +949,9 @@ export function ReportsPanel({ api }: { api: ApiRequest }) {
       `Pending tasks: ${data.pendingTasks.map((item) => `${item.title} (${item.dueDate})`).join(', ') || 'None'}`,
       `Open goal steps: ${data.pendingGoalSteps.map((item) => `${item.goal}: ${item.title}`).join(', ') || 'None'}`,
       `Suggested focus: ${data.focus.map((item) => `${item.label} — ${item.reason}`).join('; ') || 'Nothing urgent'}`,
-      report ? `AI guidance generated ${generatedAt}:\n${report}` : '',
+      aiSuggestions
+        ? `AI Suggestions prioritized ${generatedAt}:\n${aiSuggestions.map((item, index) => `${index + 1}. ${item.title} — ${item.evidence}. ${item.action}`).join('\n')}`
+        : '',
     ];
     const url = URL.createObjectURL(
       new Blob([lines.join('\n\n')], { type: 'text/plain' }),
@@ -966,8 +987,10 @@ export function ReportsPanel({ api }: { api: ApiRequest }) {
           Download report
         </button>
       </div>
-      {!data ? (
+      {loading ? (
         <p>Loading your analysis…</p>
+      ) : !data ? (
+        <p>Your analysis could not be loaded. Try refreshing.</p>
       ) : (
         <>
           <div className="insight-summary">
@@ -1087,30 +1110,86 @@ export function ReportsPanel({ api }: { api: ApiRequest }) {
               )}
             </div>
           </div>
-          <div className="settings-card">
-            <h3>AI guidance</h3>
+          <div className="settings-card ai-suggestions">
+            <h3>AI Suggestions</h3>
             <p>
-              Generate a short, account-specific suggestion when you want one.
-              This sends the report snapshot to OpenAI; it excludes journal
-              text, passwords, and tokens.
+              Practical next steps based on your account data. AI can prioritize
+              the grounded suggestions below; it sends candidate actions and
+              week totals to OpenAI, without journal text, passwords, or tokens.
             </p>
-            {data.aiAvailable ? (
-              <button onClick={() => void generate()} disabled={busy}>
-                {busy ? 'Generating…' : 'Generate AI report'}
-              </button>
+            {data.suggestions.insufficientData ? (
+              <p className="empty" role="status">
+                There is not enough activity yet for specific suggestions. Add a
+                habit, task, or goal step, then return here.
+              </p>
             ) : (
+              <>
+                <div className="suggestion-context">
+                  <div>
+                    <h4>Strength</h4>
+                    <p>
+                      {data.suggestions.strength ??
+                        'No completed scheduled check-ins recorded this week yet.'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4>Area to improve</h4>
+                    <p>
+                      {data.suggestions.improvement ??
+                        'No comparable decline or overdue task found in the available data.'}
+                    </p>
+                  </div>
+                </div>
+                {data.suggestions.priorities.length ? (
+                  <>
+                    <h4>
+                      {aiSuggestions
+                        ? 'AI-prioritized next steps'
+                        : 'Next steps from your data'}
+                    </h4>
+                    <ol className="suggestion-list" aria-live="polite">
+                      {(aiSuggestions ?? data.suggestions.priorities).map(
+                        (item) => (
+                          <li key={item.id}>
+                            <span className="suggestion-area">{item.area}</span>
+                            <strong>{item.title}</strong>
+                            <p>{item.evidence}</p>
+                            <p>
+                              <b>Action:</b> {item.action}
+                            </p>
+                          </li>
+                        ),
+                      )}
+                    </ol>
+                  </>
+                ) : (
+                  <p role="status">
+                    No pending actions to prioritize right now.
+                  </p>
+                )}
+              </>
+            )}
+            {data.aiAvailable && data.suggestions.priorities.length > 0 && (
+              <button onClick={() => void generate()} disabled={busy}>
+                {busy ? 'Prioritizing…' : 'Prioritize with AI'}
+              </button>
+            )}
+            {!data.aiAvailable && data.suggestions.priorities.length > 0 && (
               <p>
-                The server needs an OpenAI API key before AI guidance is
-                available. The analysis above works without it.
+                AI prioritization needs a server API key. The data-based
+                suggestions above are available now.
               </p>
             )}
-            {report && (
-              <div className="ai-report">
-                <small>
-                  Generated {new Date(generatedAt).toLocaleString()}
-                </small>
-                <p>{report}</p>
-              </div>
+            {busy && <p role="status">Prioritizing your next steps…</p>}
+            {aiError && (
+              <p className="error" role="alert">
+                {aiError}
+              </p>
+            )}
+            {aiSuggestions && (
+              <p className="suggestion-timestamp">
+                Prioritized {new Date(generatedAt).toLocaleString()}
+              </p>
             )}
           </div>
         </>

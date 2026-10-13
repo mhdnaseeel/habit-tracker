@@ -1,6 +1,6 @@
 # Free hosted preview: Render + Neon
 
-This setup uses one Render Free Docker web service for the website and API, plus one Neon Free PostgreSQL project for account data. It is suitable for a personal preview, not a production availability guarantee. Render's Free web service sleeps after 15 minutes without traffic and can take about a minute to wake up. Neon Free has usage and storage limits; check the current plan before creating it. OpenAI AI reports require separate API credits. The app's non-AI reports work without an OpenAI key.
+This setup uses one Render Free Docker web service for the website and API, plus one Neon Free PostgreSQL project for account data. It is suitable for a personal preview, not a production availability guarantee. Render's Free web service sleeps after 15 minutes without traffic and can take about a minute to wake up. Neon Free has usage and storage limits; check the current plan before creating it. AI Suggestions prioritization requires separate OpenAI API credits; data-based suggestions work without them.
 
 Provider references: [Render Free limits](https://render.com/docs/free), [Render Docker deployment](https://render.com/docs/docker), [Render Blueprint specification](https://render.com/docs/blueprint-spec), [Neon Free plan](https://neon.com/blog/neon-free-plan-1-gb-per-project).
 
