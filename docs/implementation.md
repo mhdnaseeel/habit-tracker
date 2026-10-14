@@ -15,7 +15,7 @@ Updated 2026-10-14. The source PRDs remain unchanged. Later product-owner decisi
 ## Verification evidence
 
 - On 2026-10-14, `npm run check`, `npm audit --audit-level=moderate`, `npm run test:mcp`, `npm run test:mcp-remote`, `npm run test:activities`, `npm run test:journal` and `npm run test:mentor-provider` passed locally. The integration tests use disposable accounts against Docker.
-- [GitHub CI for commit `70a3ff1`](https://github.com/mhdnaseeel/habit-tracker/actions/runs/38504282948) passed formatting, lint, type checking, build and dependency audit. It does not run database-backed integration tests.
+- [GitHub CI for commit `70a3ff1`](https://github.com/mhdnaseeel/habit-tracker/actions/runs/38504282948) passed formatting, lint, type checking, build and dependency audit. A later revision adds the Docker-backed integration suite to CI; its first run must pass before that coverage is counted.
 - The hosted preview returned HTTP 200 for `/health/ready` and OAuth protected-resource metadata, and HTTP 401 for anonymous `/mcp`. A credentialed third-party client connection to the hosted service has not been tested.
 - Historical tests removed at the owner's request do not provide current regression coverage. See the [MCP phase audit](mcp-phase-audit.md) for the scoped review.
 

@@ -14,3 +14,19 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm audit --audit-level=moderate
+      - name: Run Docker integration tests
+        timeout-minutes: 15
+        run: |
+          sh scripts/docker-up.sh
+          docker compose --env-file .env.docker --profile ai build mcp
+          npm run test:activities
+          npm run test:journal
+          npm run test:mentor-provider
+          npm run test:mcp
+          npm run test:mcp-remote
+      - name: Stop Docker integration stack
+        if: always()
+        run: |
+          if [ -f .env.docker ]; then
+            docker compose --env-file .env.docker down -v
+          fi

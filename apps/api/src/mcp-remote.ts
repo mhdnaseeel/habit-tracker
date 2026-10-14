@@ -14,7 +14,9 @@ type Authenticate = (
   reply: FastifyReply,
 ) => Promise<Principal | undefined>;
 const scope = 'habit.read';
-const pkce = /^[A-Za-z0-9_-]{43,128}$/;
+const pkceChallenge = /^[A-Za-z0-9_-]{43}$/;
+// RFC 7636 permits period and tilde in a verifier; current MCP clients use them.
+const pkceVerifier = /^[A-Za-z0-9._~-]{43,128}$/;
 const uuid = z.uuid();
 const registration = z
   .object({
@@ -32,7 +34,7 @@ const authorization = z
     redirect_uri: z.url().max(2048),
     scope: z.literal(scope),
     state: z.string().min(1).max(512),
-    code_challenge: z.string().regex(pkce),
+    code_challenge: z.string().regex(pkceChallenge),
     code_challenge_method: z.literal('S256'),
     resource: z.url(),
   })
@@ -52,7 +54,7 @@ const tokenRequest = z.discriminatedUnion('grant_type', [
       client_id: uuid,
       code: z.string().min(1).max(128),
       redirect_uri: z.url(),
-      code_verifier: z.string().regex(pkce),
+      code_verifier: z.string().regex(pkceVerifier),
       resource: z.url(),
     })
     .passthrough(),
@@ -187,60 +189,66 @@ export async function registerMcpRemote(
     },
   );
 
-  app.get('/oauth/authorize', async (request, reply) => {
-    const parsed = authorization.safeParse(request.query);
-    if (!parsed.success || parsed.data.resource !== resource)
-      return oauthError(reply, 400, 'invalid_request');
-    const client = (
-      await pool.query<{ name: string; redirect_uris: string[] }>(
-        'SELECT name,redirect_uris FROM mcp_oauth_clients WHERE id=$1',
-        [parsed.data.client_id],
-      )
-    ).rows[0];
-    if (!client || !client.redirect_uris.includes(parsed.data.redirect_uri))
-      return oauthError(reply, 400, 'invalid_client');
-    const pending = await pool.query<{ id: string }>(
-      'INSERT INTO mcp_oauth_requests(client_id,redirect_uri,state,code_challenge,resource) VALUES($1,$2,$3,$4,$5) RETURNING id',
-      [
-        parsed.data.client_id,
-        parsed.data.redirect_uri,
-        parsed.data.state,
-        parsed.data.code_challenge,
-        resource,
-      ],
-    );
-    const requestId = pending.rows[0]?.id;
-    if (!requestId) throw new Error('OAuth request insert failed');
-    return reply
-      .type('text/html; charset=utf-8')
-      .header('Referrer-Policy', 'no-referrer')
-      .header('Cache-Control', 'no-store')
-      .send(
+  app.get(
+    '/oauth/authorize',
+    {
+      config: { rateLimit: { max: 30, timeWindow: '15 minutes' } },
+    },
+    async (request, reply) => {
+      const parsed = authorization.safeParse(request.query);
+      if (!parsed.success || parsed.data.resource !== resource)
+        return oauthError(reply, 400, 'invalid_request');
+      const client = (
+        await pool.query<{ name: string; redirect_uris: string[] }>(
+          'SELECT name,redirect_uris FROM mcp_oauth_clients WHERE id=$1',
+          [parsed.data.client_id],
+        )
+      ).rows[0];
+      if (!client || !client.redirect_uris.includes(parsed.data.redirect_uri))
+        return oauthError(reply, 400, 'invalid_client');
+      const pending = await pool.query<{ id: string }>(
+        'INSERT INTO mcp_oauth_requests(client_id,redirect_uri,state,code_challenge,resource) VALUES($1,$2,$3,$4,$5) RETURNING id',
         [
-          '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1">',
-          '<title>Connect Habit Tracker</title><style>',
-          'body{font:16px system-ui;background:#faf3f0;color:#243d35;max-width:32rem;margin:8vh auto;padding:1.5rem}',
-          'main{background:white;border-radius:1rem;padding:2rem;box-shadow:0 8px 30px #243d3520}',
-          'input,button{font:inherit;width:100%;box-sizing:border-box;padding:.75rem;margin:.4rem 0 1rem;border-radius:.5rem;border:1px solid #9a9a9a}',
-          'button{background:#b9674b;color:white;border:0;cursor:pointer}button.secondary{background:#e9ece8;color:#243d35}',
-          'label{display:block;font-weight:600}small{display:block;overflow-wrap:anywhere}</style>',
-          '<main><h1>Connect Habit Tracker</h1><p><strong>',
-          html(client.name),
-          '</strong> requests read-only access to your habits, tasks, goals, Today plan, insights, and daily journal.</p>',
-          '<p>Only connect a client you trust. It may send what it reads to its own AI service.</p>',
-          '<small>Return to: ',
-          html(parsed.data.redirect_uri),
-          '</small>',
-          '<form method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="',
-          requestId,
-          '"><label>Email<input name="email" type="email" autocomplete="username" required></label>',
-          '<label>Password<input name="password" type="password" autocomplete="current-password" required></label>',
-          '<button name="decision" value="approve" type="submit">Sign in and allow read-only access</button>',
-          '<button class="secondary" name="decision" value="deny" type="submit" formnovalidate>Cancel</button>',
-          '</form></main></html>',
-        ].join(''),
+          parsed.data.client_id,
+          parsed.data.redirect_uri,
+          parsed.data.state,
+          parsed.data.code_challenge,
+          resource,
+        ],
       );
-  });
+      const requestId = pending.rows[0]?.id;
+      if (!requestId) throw new Error('OAuth request insert failed');
+      return reply
+        .type('text/html; charset=utf-8')
+        .header('Referrer-Policy', 'no-referrer')
+        .header('Cache-Control', 'no-store')
+        .send(
+          [
+            '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1">',
+            '<title>Connect Habit Tracker</title><style>',
+            'body{font:16px system-ui;background:#faf3f0;color:#243d35;max-width:32rem;margin:8vh auto;padding:1.5rem}',
+            'main{background:white;border-radius:1rem;padding:2rem;box-shadow:0 8px 30px #243d3520}',
+            'input,button{font:inherit;width:100%;box-sizing:border-box;padding:.75rem;margin:.4rem 0 1rem;border-radius:.5rem;border:1px solid #9a9a9a}',
+            'button{background:#b9674b;color:white;border:0;cursor:pointer}button.secondary{background:#e9ece8;color:#243d35}',
+            'label{display:block;font-weight:600}small{display:block;overflow-wrap:anywhere}</style>',
+            '<main><h1>Connect Habit Tracker</h1><p><strong>',
+            html(client.name),
+            '</strong> requests read-only access to your habits, tasks, goals, Today plan, insights, and daily journal.</p>',
+            '<p>Only connect a client you trust. It may send what it reads to its own AI service.</p>',
+            '<small>Return to: ',
+            html(parsed.data.redirect_uri),
+            '</small>',
+            '<form method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="',
+            requestId,
+            '"><label>Email<input name="email" type="email" autocomplete="username" required></label>',
+            '<label>Password<input name="password" type="password" autocomplete="current-password" required></label>',
+            '<button name="decision" value="approve" type="submit">Sign in and allow read-only access</button>',
+            '<button class="secondary" name="decision" value="deny" type="submit" formnovalidate>Cancel</button>',
+            '</form></main></html>',
+          ].join(''),
+        );
+    },
+  );
 
   app.post(
     '/oauth/authorize',
