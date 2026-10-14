@@ -1418,7 +1418,7 @@ export function SettingsPanel({
         <p>
           See{' '}
           <a
-            href="https://github.com/mhdnaseeel/habit-tracker/blob/main/docs/mcp.md"
+            href="https://github.com/mhdnaseeel/habit-tracker/blob/main/docs/local-development.md"
             target="_blank"
             rel="noreferrer"
           >

@@ -10,7 +10,7 @@ Start the local stack with `./scripts/docker-up.sh`. Compose starts PostgreSQL, 
 
 ## Current deployment limits
 
-Dockerfile builds frontend assets, a migration image, pruned API and optional MCP runtime images, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. The optional MCP process is started through the `ai` profile with a user-generated read-only token; see [MCP setup](mcp.md). This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
+Dockerfile builds frontend assets, a migration image, pruned API and optional MCP runtime images, and an Nginx web image. The local Compose stack binds only the web port on loopback; API and PostgreSQL stay on the internal Compose network. The optional MCP process is started through the `ai` profile with a user-generated read-only token; see [development setup](local-development.md). This local stack serves HTTP. TLS termination and production cloud IaC are still pending for an internet deployment. Availability/latency SLOs have not been measured. Hosting at-rest encryption, encrypted backups/PITR, multi-AZ, secrets rotation, metrics/tracing, provider adapters, erasure replay, disaster recovery and canary rollout remain required release work.
 
 ## Troubleshooting
 
