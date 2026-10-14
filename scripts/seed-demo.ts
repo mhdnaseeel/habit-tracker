@@ -177,6 +177,58 @@ async function main() {
   if (!goal.habitIds.includes(reading.id))
     await request(`/api/v1/goals/${goal.id}/habits/${reading.id}`, 'POST');
 
+  const agenda = await request<{
+    activities: {
+      title: string;
+      linkedHabitId: number | null;
+      linkedTaskId: number | null;
+    }[];
+  }>(`/api/v1/activities?date=${today}`);
+  async function addActivity(body: Record<string, unknown>) {
+    const exists = agenda.activities.some(
+      (item) =>
+        (body.linkedHabitId && item.linkedHabitId === body.linkedHabitId) ||
+        (body.linkedTaskId && item.linkedTaskId === body.linkedTaskId) ||
+        (!body.linkedHabitId &&
+          !body.linkedTaskId &&
+          item.title === body.title),
+    );
+    if (!exists)
+      await request('/api/v1/activities', 'POST', {
+        ...body,
+        scheduledDate: today,
+      });
+  }
+  await addActivity({
+    title: 'Drink water',
+    activityType: 'habit',
+    linkedHabitId: habits.get('Drink water')!.id,
+    startTime: '08:00',
+    endTime: '08:30',
+  });
+  await addActivity({
+    title: 'Review priorities',
+    activityType: 'task',
+    linkedTaskId: tasks.get('Review priorities')!.id,
+    startTime: '08:15',
+    endTime: '08:45',
+    priority: 2,
+  });
+  await addActivity({
+    title: 'Focus session',
+    activityType: 'appointment',
+    description: 'One focused block for the most important work.',
+    startTime: '10:00',
+    endTime: '11:00',
+  });
+  await addActivity({
+    title: 'Read the first chapter',
+    activityType: 'goal_action',
+    linkedGoalId: goal.id,
+    startTime: '20:00',
+    endTime: '20:30',
+  });
+
   const mindset = await request<{ entries: unknown[] }>(
     `/api/v1/mindset?from=${today}&to=${today}`,
   );

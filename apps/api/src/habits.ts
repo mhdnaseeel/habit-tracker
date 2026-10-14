@@ -718,6 +718,30 @@ export async function registerHabits(
           `UPDATE habits SET active=false,archived_on=$1,version=version+1,updated_at=now() WHERE id=$2 AND user_id=$3`,
           [archivedOn, id, user.userId],
         );
+        const cancelled = (
+          await client.query<{ id: number; version: number }>(
+            "UPDATE daily_activities SET status='cancelled',cancelled_at=now(),version=version+1,updated_at=now() WHERE linked_habit_id=$1 AND user_id=$2 AND scheduled_date>=$3 AND cancelled_at IS NULL RETURNING id,version",
+            [id, user.userId, archivedOn],
+          )
+        ).rows;
+        for (const block of cancelled) {
+          await audit(
+            client,
+            user.userId,
+            'DailyActivity',
+            block.id,
+            'CANCEL',
+            request.id,
+          );
+          await updateSync(
+            client,
+            user.userId,
+            'DailyActivity',
+            block.id,
+            block.version,
+            true,
+          );
+        }
         await audit(client, user.userId, 'Habit', id, 'ARCHIVE', request.id);
         await updateSync(
           client,

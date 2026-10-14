@@ -319,6 +319,24 @@ export async function registerTasks(
             `UPDATE task_instances SET original_date=$1,display_date=$1,version=version+1,updated_at=now() WHERE id=$2`,
             [input.dueDate, task.occurrence_id],
           );
+        if (input.dueDate && input.dueDate !== task.due_date) {
+          const moved = (
+            await client.query<{ id: number; version: number }>(
+              'UPDATE daily_activities SET scheduled_date=$1,version=version+1,updated_at=now() WHERE linked_task_id=$2 AND user_id=$3 AND cancelled_at IS NULL RETURNING id,version',
+              [input.dueDate, id, user.userId],
+            )
+          ).rows;
+          for (const block of moved) {
+            await client.query(
+              "INSERT INTO audit_logs(user_id,entity,entity_id,action,request_id) VALUES($1,'DailyActivity',$2,'RESCHEDULE',$3)",
+              [user.userId, String(block.id), request.id],
+            );
+            await client.query(
+              "INSERT INTO sync_changes(user_id,entity,entity_id,version) VALUES($1,'DailyActivity',$2,$3)",
+              [user.userId, String(block.id), block.version],
+            );
+          }
+        }
         await audit(
           client,
           user.userId,
@@ -443,6 +461,22 @@ export async function registerTasks(
           `UPDATE tasks SET archived_at=now(),version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2`,
           [id, user.userId],
         );
+        const cancelled = (
+          await client.query<{ id: number; version: number }>(
+            "UPDATE daily_activities SET status='cancelled',cancelled_at=now(),version=version+1,updated_at=now() WHERE linked_task_id=$1 AND user_id=$2 AND cancelled_at IS NULL RETURNING id,version",
+            [id, user.userId],
+          )
+        ).rows;
+        for (const block of cancelled) {
+          await client.query(
+            "INSERT INTO audit_logs(user_id,entity,entity_id,action,request_id) VALUES($1,'DailyActivity',$2,'CANCEL',$3)",
+            [user.userId, String(block.id), request.id],
+          );
+          await client.query(
+            "INSERT INTO sync_changes(user_id,entity,entity_id,version,deleted) VALUES($1,'DailyActivity',$2,$3,true)",
+            [user.userId, String(block.id), block.version],
+          );
+        }
         await audit(
           client,
           user.userId,

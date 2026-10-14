@@ -532,6 +532,7 @@ export async function registerAuth(
           legacyFreezes: `SELECT habit_id,month,occurrence_date,created_at FROM freeze_usage WHERE user_id=$1 ORDER BY occurrence_date`,
           tasks: `SELECT id,title,description,due_date,priority,recurrence,carry_over,archived_at,created_at,updated_at FROM tasks WHERE user_id=$1 ORDER BY id`,
           taskCheckIns: `SELECT task_id,original_date,display_date,completed_at,created_at,updated_at FROM task_instances WHERE user_id=$1 ORDER BY original_date,task_id`,
+          dailyActivities: `SELECT id,title,description,activity_type,scheduled_date,start_time,end_time,timezone,priority,reminder_time,notes,status,linked_task_id,linked_habit_id,linked_goal_id,completed_at,cancelled_at,created_at,updated_at FROM daily_activities WHERE user_id=$1 ORDER BY scheduled_date,start_time,id`,
           mindset: `SELECT date,energy,focus,motivation,updated_at FROM daily_mindset WHERE user_id=$1 ORDER BY date`,
           goals: `SELECT id,title,description,category,target,unit,start_date,deadline,completed_at,archived_at,created_at,updated_at FROM goals WHERE user_id=$1 ORDER BY id`,
           goalSteps: `SELECT id,goal_id,title,completed_at,sort_order,created_at FROM goal_steps WHERE user_id=$1 ORDER BY goal_id,sort_order,id`,

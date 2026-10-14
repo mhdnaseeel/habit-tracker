@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
 import { monthRange, weekRange } from './calendar.ts';
-import { HistoryPanel, WeeklyProgress, type HistoryWeek } from './history.tsx';
+import { HistoryPanel, type HistoryWeek } from './history.tsx';
+import { TodayAgenda } from './today-agenda.tsx';
 import {
   GoalPlanner,
   InsightsPanel,
@@ -27,31 +28,9 @@ type User = {
   timezone: string;
   version: number;
 };
-type TodayHabit = {
-  id: number;
-  name: string;
-  category: string | null;
-  color: string | null;
-  target: number;
-  value: number;
-  status: 'pending' | 'partial' | 'completed' | 'frozen' | 'missed';
-  streak: { current: number; best: number };
-  freezeAvailable: boolean;
-};
 type Today = {
   date: string;
-  habits: TodayHabit[];
-  progress: { completed: number; due: number; percentage: number | null };
-};
-type Task = {
-  id: number;
-  title: string;
-  dueDate: string;
-  displayDate: string;
-  priority: number;
-  carryOver: boolean;
-  completed: boolean;
-  version: number;
+  habits: { id: number; freezeAvailable: boolean }[];
 };
 type AuthResponse = {
   user: User;
@@ -107,15 +86,10 @@ function App() {
   const navigation = useRef<HTMLElement>(null);
   const [user, setUser] = useState<User | null>(null);
   const [today, setToday] = useState<Today | null>(null);
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [currentWeek, setCurrentWeek] = useState<HistoryWeek | null>(null);
   const [historyWeek, setHistoryWeek] = useState<HistoryWeek | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [historyMode, setHistoryMode] = useState<'week' | 'month'>('week');
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [carryOver, setCarryOver] = useState(true);
-  const [showTaskCreate, setShowTaskCreate] = useState(false);
   const [view, setView] = useState<View>('today');
   const [menuOpen, setMenuOpen] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -147,7 +121,7 @@ function App() {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setMenuOpen(false);
-      menuButton.current?.focus();
+      window.requestAnimationFrame(() => menuButton.current?.focus());
     };
     const closeOutside = (event: PointerEvent) => {
       if (
@@ -223,13 +197,6 @@ function App() {
   async function loadToday() {
     const data = await request<Today>('/api/v1/today');
     setToday(data);
-    await Promise.all([loadTasks(data.date), loadCurrentWeek(data.date)]);
-  }
-  async function loadTasks(date: string) {
-    const data = await request<{ tasks: Task[] }>(
-      `/api/v1/tasks?from=${date}&to=${date}`,
-    );
-    setTasks(data.tasks);
   }
   async function loadHabits() {
     const habits: HabitSummary[] = [];
@@ -244,13 +211,6 @@ function App() {
       page++;
     } while (habits.length < total);
     setHabitList(habits);
-  }
-  async function loadCurrentWeek(date: string) {
-    const range = weekRange(date);
-    const data = await request<HistoryWeek>(
-      `/api/v1/history?from=${range.from}&to=${range.to}`,
-    );
-    setCurrentWeek(data);
   }
   async function loadHistory(
     offset: number,
@@ -424,105 +384,6 @@ function App() {
       setBusy(false);
     }
   }
-  async function createTask(event: FormEvent) {
-    event.preventDefault();
-    if (!today) return;
-    setBusy(true);
-    setError('');
-    try {
-      await request('/api/v1/tasks', 'POST', {
-        title: taskTitle,
-        dueDate: today.date,
-        carryOver,
-      });
-      setTaskTitle('');
-      setShowTaskCreate(false);
-      await loadTasks(today.date);
-      setNotice('Task saved.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not save task');
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function changeTask(
-    task: Task,
-    action: 'complete' | 'undo' | 'archive',
-  ) {
-    if (!today) return;
-    setBusy(true);
-    setError('');
-    try {
-      await request(
-        `/api/v1/tasks/${task.id}${action === 'archive' ? '' : `/${action}`}`,
-        action === 'archive' ? 'DELETE' : 'POST',
-      );
-      await loadTasks(today.date);
-      setNotice(action === 'archive' ? 'Task archived.' : 'Task updated.');
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Could not update task',
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function changeHabit(
-    habit: TodayHabit,
-    action: 'complete' | 'skip' | 'undo',
-  ) {
-    if (!today) return;
-    if (
-      action === 'skip' &&
-      !window.confirm(`Use this week's freeze for ${habit.name}?`)
-    )
-      return;
-    const previous = today;
-    setError('');
-    setNotice('');
-    if (action === 'complete') {
-      setToday({
-        ...today,
-        habits: today.habits.map((item) =>
-          item.id === habit.id
-            ? {
-                ...item,
-                value: habit.target === 1 ? 1 : item.value + 1,
-                status:
-                  habit.target === 1 || item.value + 1 >= item.target
-                    ? 'completed'
-                    : 'partial',
-              }
-            : item,
-        ),
-      });
-    }
-    setBusy(true);
-    try {
-      const body =
-        action === 'complete'
-          ? habit.target === 1
-            ? { date: today.date }
-            : { date: today.date, value: 1, mutationId: crypto.randomUUID() }
-          : { date: today.date };
-      await request(`/api/v1/habits/${habit.id}/${action}`, 'POST', body);
-      await loadToday();
-      setNotice(
-        action === 'skip'
-          ? 'Day skipped.'
-          : action === 'undo'
-            ? 'Completion undone.'
-            : 'Habit updated.',
-      );
-    } catch (cause) {
-      setToday(previous);
-      setError(
-        cause instanceof Error ? cause.message : 'Could not update habit',
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
   async function archiveHabit(habit: { id: number; name: string }) {
     if (
       !window.confirm(
@@ -552,9 +413,7 @@ function App() {
       token.current = null;
       setUser(null);
       setToday(null);
-      setTasks(null);
       setHabitList(null);
-      setCurrentWeek(null);
       setHistoryWeek(null);
       setNotice('Signed out.');
     } catch (cause) {
@@ -590,9 +449,7 @@ function App() {
     token.current = null;
     setUser(null);
     setToday(null);
-    setTasks(null);
     setHabitList(null);
-    setCurrentWeek(null);
     setHistoryWeek(null);
     setView('today');
     setNotice('Your account was deleted.');
@@ -617,12 +474,6 @@ function App() {
     { view: 'journal', label: 'Journal' },
     { view: 'settings', label: 'Settings' },
   ];
-  const dateLabel = today
-    ? new Intl.DateTimeFormat('en-IN', {
-        dateStyle: 'full',
-        timeZone: 'UTC',
-      }).format(new Date(`${today.date}T00:00:00Z`))
-    : '';
   return (
     <main className="shell">
       <header className="header">
@@ -772,203 +623,17 @@ function App() {
             </button>
           </nav>
           {view === 'today' ? (
-            <section aria-labelledby="today-title">
-              <div className="section-head">
-                <div>
-                  <p className="eyebrow">{dateLabel}</p>
-                  <h2 id="today-title">Today’s habits</h2>
-                </div>
-                <div
-                  className="progress"
-                  role="status"
-                  style={
-                    {
-                      '--ring-progress': `${today?.progress.percentage ?? 0}%`,
-                    } as React.CSSProperties
-                  }
-                  aria-label={
-                    today
-                      ? `${today.progress.completed} of ${today.progress.due} habits completed`
-                      : 'Loading habits'
-                  }
-                >
-                  {today
-                    ? `${today.progress.completed} / ${today.progress.due}`
-                    : '…'}
-                </div>
-              </div>
-              {today === null ? (
-                <p>Loading today’s habits…</p>
-              ) : today.habits.length === 0 ? (
-                <div className="empty">
-                  <p>No habits scheduled for today.</p>
-                  <button onClick={openCreateHabit}>Add a habit</button>
-                </div>
-              ) : (
-                <ul className="habit-list">
-                  {today.habits.map((habit) => (
-                    <li key={habit.id} className="habit-row">
-                      <span
-                        className="dot"
-                        style={{
-                          backgroundColor: habit.color ?? 'var(--accent)',
-                        }}
-                        aria-hidden="true"
-                      />
-                      <div className="habit-copy">
-                        <strong>{habit.name}</strong>
-                        <small>
-                          {habit.status === 'frozen'
-                            ? 'Skipped'
-                            : habit.status === 'completed'
-                              ? 'Completed'
-                              : habit.target > 1
-                                ? `${habit.value} of ${habit.target}`
-                                : 'Ready'}{' '}
-                          · Streak {habit.streak.current}
-                        </small>
-                      </div>
-                      <div className="habit-actions">
-                        {habit.status === 'completed' ||
-                        habit.status === 'partial' ? (
-                          <button
-                            className="quiet"
-                            onClick={() => void changeHabit(habit, 'undo')}
-                            disabled={busy}
-                            aria-label={`Undo ${habit.name}`}
-                          >
-                            Undo
-                          </button>
-                        ) : (
-                          habit.status !== 'frozen' && (
-                            <button
-                              className="quiet"
-                              onClick={() => void changeHabit(habit, 'skip')}
-                              disabled={busy || !habit.freezeAvailable}
-                              title={
-                                habit.freezeAvailable
-                                  ? 'Protect this streak once this week'
-                                  : 'Requires a two-day streak and an unused weekly freeze'
-                              }
-                              aria-label={`Freeze ${habit.name}`}
-                            >
-                              ❄ Freeze
-                            </button>
-                          )
-                        )}
-                        {habit.status !== 'completed' &&
-                          habit.status !== 'frozen' && (
-                            <button
-                              onClick={() =>
-                                void changeHabit(habit, 'complete')
-                              }
-                              disabled={busy}
-                              aria-label={
-                                habit.target > 1
-                                  ? `Add one to ${habit.name}`
-                                  : `Complete ${habit.name}`
-                              }
-                            >
-                              {habit.target > 1 ? '+1' : 'Done'}
-                            </button>
-                          )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button
-                className="add"
-                onClick={() =>
-                  showCreate ? closeHabitForm() : openCreateHabit()
-                }
-                aria-expanded={showCreate}
-              >
-                {showCreate ? 'Close form' : 'Add habit'}
-              </button>
-              <WeeklyProgress week={currentWeek} />
-              <section aria-labelledby="tasks-title" className="tasks-section">
-                <div className="section-head">
-                  <h2 id="tasks-title">Today’s tasks</h2>
-                  <button
-                    onClick={() => setShowTaskCreate(!showTaskCreate)}
-                    aria-expanded={showTaskCreate}
-                  >
-                    {showTaskCreate ? 'Close form' : 'Add task'}
-                  </button>
-                </div>
-                {showTaskCreate && (
-                  <form className="create task-create" onSubmit={createTask}>
-                    <label>
-                      Task name
-                      <input
-                        required
-                        maxLength={100}
-                        value={taskTitle}
-                        onChange={(e) => setTaskTitle(e.target.value)}
-                        placeholder="What needs doing today?"
-                      />
-                    </label>
-                    <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={carryOver}
-                        onChange={(e) => setCarryOver(e.target.checked)}
-                      />
-                      Carry unfinished task to tomorrow
-                    </label>
-                    <button type="submit" disabled={busy || !today}>
-                      Save task
-                    </button>
-                  </form>
-                )}
-                {tasks === null ? (
-                  <p>Loading tasks…</p>
-                ) : tasks.length === 0 ? (
-                  <p>No tasks due today.</p>
-                ) : (
-                  <ul className="habit-list">
-                    {tasks.map((task) => (
-                      <li key={task.id} className="habit-row">
-                        <span className="dot task-dot" aria-hidden="true" />
-                        <div className="habit-copy">
-                          <strong>{task.title}</strong>
-                          <small>
-                            {task.completed
-                              ? 'Completed'
-                              : today && task.dueDate < today.date
-                                ? 'Carried over'
-                                : 'Due today'}
-                          </small>
-                        </div>
-                        <div className="habit-actions">
-                          <button
-                            className="quiet"
-                            disabled={busy}
-                            onClick={() =>
-                              void changeTask(
-                                task,
-                                task.completed ? 'undo' : 'complete',
-                              )
-                            }
-                          >
-                            {task.completed ? 'Undo' : 'Done'}
-                          </button>
-                          <button
-                            className="quiet"
-                            disabled={busy}
-                            onClick={() => void changeTask(task, 'archive')}
-                            aria-label={`Archive ${task.title}`}
-                          >
-                            Archive
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </section>
+            today ? (
+              <TodayAgenda
+                api={request}
+                today={today.date}
+                todayHabits={today.habits}
+                timezone={user.timezone}
+                onChanged={loadToday}
+              />
+            ) : (
+              <p>Loading your day…</p>
+            )
           ) : view === 'habits' ? (
             <section aria-labelledby="habits-title">
               <div className="section-head">
