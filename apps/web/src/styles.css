@@ -848,6 +848,118 @@ input::placeholder {
   margin: 16px 0;
   font-weight: 600;
 }
+.journal-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(230px, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.journal-layout > *,
+.journal-side,
+.mentor-panel {
+  min-width: 0;
+}
+.journal-side {
+  display: grid;
+  gap: 16px;
+}
+.journal-side .settings-card {
+  max-width: none;
+  margin: 0;
+}
+.journal-side ul,
+.mentor-output ul {
+  padding-left: 22px;
+  overflow-wrap: anywhere;
+}
+.journal-history {
+  list-style: none;
+  padding: 0 !important;
+}
+.journal-history li + li {
+  margin-top: 6px;
+}
+.journal-history button {
+  width: 100%;
+  text-align: left;
+}
+.journal-form label,
+.mentor-controls label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+.journal-form .muted,
+.mentor-panel .muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+.journal-status {
+  margin: 0;
+  color: var(--muted);
+}
+.journal-mentor {
+  margin-top: 18px;
+}
+.mentor-panel {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.mentor-compact {
+  margin-top: 12px;
+}
+.mentor-controls {
+  display: grid;
+  gap: 14px;
+}
+.mentor-consent {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 400 !important;
+}
+.mentor-consent input {
+  width: 20px;
+  min-height: 20px;
+  flex: 0 0 20px;
+  margin-top: 3px;
+}
+.mentor-recommendations {
+  display: grid;
+  gap: 12px;
+  padding-left: 24px;
+}
+.mentor-recommendations li {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.mentor-rec-head {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mentor-rec-head span {
+  color: var(--accent-text);
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.mentor-output {
+  margin-top: 22px;
+}
+@media (max-width: 700px) {
+  .journal-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .journal-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 .settings-card {
   max-width: 600px;
 }

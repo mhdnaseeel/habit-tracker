@@ -40,15 +40,6 @@ const mindsetInput = z
     motivation: z.number().int().min(1).max(5),
   })
   .strict();
-const journalInput = z
-  .object({
-    content: z.string().trim().min(1).max(20000),
-    version: z.number().int().positive().nullable(),
-  })
-  .strict();
-const journalDelete = z
-  .object({ version: z.number().int().positive() })
-  .strict();
 const idParams = z.object({ id: z.coerce.number().int().positive() });
 const stepParams = z.object({
   id: z.coerce.number().int().positive(),
@@ -450,102 +441,6 @@ export async function registerPlanner(
         [user.userId, params.date, input.energy, input.focus, input.motivation],
       );
       return { entry: { date: params.date, ...input } };
-    },
-  );
-  app.get(
-    '/api/v1/journal/:date',
-    {
-      schema: {
-        tags: ['Journal'],
-        summary: 'Read an owned daily journal entry',
-      },
-    },
-    async (request, reply) => {
-      const user = await authenticate(request, reply);
-      if (!user) return;
-      const params = parse(dateParams, request.params, reply, request);
-      if (!params) return;
-      const row = (
-        await pool.query<{
-          content: string;
-          version: number;
-          updated_at: Date;
-        }>(
-          'SELECT content,version,updated_at FROM daily_journal WHERE user_id=$1 AND entry_date=$2',
-          [user.userId, params.date],
-        )
-      ).rows[0];
-      return {
-        date: params.date,
-        content: row?.content ?? '',
-        version: row?.version ?? null,
-        updatedAt: row?.updated_at ?? null,
-      };
-    },
-  );
-  app.put(
-    '/api/v1/journal/:date',
-    {
-      schema: {
-        tags: ['Journal'],
-        summary: 'Save an owned daily journal entry',
-      },
-    },
-    async (request, reply) => {
-      const user = await authenticate(request, reply);
-      if (!user) return;
-      const params = parse(dateParams, request.params, reply, request);
-      if (!params) return;
-      const input = parse(journalInput, request.body, reply, request);
-      if (!input) return;
-      const result =
-        input.version === null
-          ? await pool.query<{ version: number }>(
-              'INSERT INTO daily_journal(user_id,entry_date,content) VALUES($1,$2,$3) ON CONFLICT(user_id,entry_date) DO NOTHING RETURNING version',
-              [user.userId, params.date, input.content],
-            )
-          : await pool.query<{ version: number }>(
-              'UPDATE daily_journal SET content=$3,version=version+1,updated_at=now() WHERE user_id=$1 AND entry_date=$2 AND version=$4 RETURNING version',
-              [user.userId, params.date, input.content, input.version],
-            );
-      const saved = result.rows[0];
-      if (!saved)
-        return reply.code(409).send({
-          message:
-            'Reflection changed on another device. Reload before saving.',
-        });
-      return {
-        date: params.date,
-        content: input.content,
-        version: saved.version,
-      };
-    },
-  );
-  app.delete(
-    '/api/v1/journal/:date',
-    {
-      schema: {
-        tags: ['Journal'],
-        summary: 'Delete an owned daily journal entry',
-      },
-    },
-    async (request, reply) => {
-      const user = await authenticate(request, reply);
-      if (!user) return;
-      const params = parse(dateParams, request.params, reply, request);
-      if (!params) return;
-      const input = parse(journalDelete, request.body, reply, request);
-      if (!input) return;
-      const result = await pool.query(
-        'DELETE FROM daily_journal WHERE user_id=$1 AND entry_date=$2 AND version=$3',
-        [user.userId, params.date, input.version],
-      );
-      if (!result.rowCount)
-        return reply.code(409).send({
-          message:
-            'Reflection changed on another device. Reload before deleting.',
-        });
-      return reply.code(204).send();
     },
   );
 }

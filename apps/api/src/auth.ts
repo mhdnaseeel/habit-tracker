@@ -524,7 +524,7 @@ export async function registerAuth(
         );
         const tables = {
           profile: `SELECT id,email,name,timezone,created_at,updated_at FROM users WHERE id=$1`,
-          settings: `SELECT week_start,locale,theme,dnd_start,dnd_end,notify_push,notify_email,notify_sms,analytics_consent FROM settings WHERE user_id=$1`,
+          settings: `SELECT week_start,locale,theme,dnd_start,dnd_end,notify_push,notify_email,notify_sms,analytics_consent,ai_journal_consent,ai_journal_consent_at FROM settings WHERE user_id=$1`,
           habits: `SELECT id,name,description,category,icon,color,active,start_date,end_date,archived_on,sort_order,created_at,updated_at FROM habits WHERE user_id=$1 ORDER BY id`,
           schedules: `SELECT id,habit_id,effective_from,frequency,weekdays,month_days,target,unit,reminder_time FROM habit_schedules WHERE user_id=$1 ORDER BY habit_id,effective_from`,
           checkIns: `SELECT id,habit_id,date,timezone,status,value,target,notes,created_at,updated_at FROM habit_instances WHERE user_id=$1 ORDER BY date,id`,
@@ -537,7 +537,8 @@ export async function registerAuth(
           goals: `SELECT id,title,description,category,target,unit,start_date,deadline,completed_at,archived_at,created_at,updated_at FROM goals WHERE user_id=$1 ORDER BY id`,
           goalSteps: `SELECT id,goal_id,title,completed_at,sort_order,created_at FROM goal_steps WHERE user_id=$1 ORDER BY goal_id,sort_order,id`,
           goalHabits: `SELECT goal_id,habit_id,linked_on,unlinked_on FROM goal_habits WHERE user_id=$1 ORDER BY goal_id,habit_id`,
-          journal: `SELECT entry_date AS date,content,updated_at FROM daily_journal WHERE user_id=$1 ORDER BY entry_date`,
+          journal: `SELECT entry_date AS date,content,blueprint_id,blueprint_snapshot,responses,status,version,updated_at FROM daily_journal WHERE user_id=$1 ORDER BY entry_date`,
+          legacyMonthlyJournal: `SELECT month,content,version,updated_at FROM monthly_journal WHERE user_id=$1 ORDER BY month`,
           reflections: `SELECT date,habit_id,task_id,content,mood,created_at,updated_at FROM reflections WHERE user_id=$1 ORDER BY date,id`,
           assistantTokens: `SELECT id,label,created_at,expires_at,revoked_at FROM mcp_read_tokens WHERE user_id=$1 ORDER BY created_at`,
         } as const;

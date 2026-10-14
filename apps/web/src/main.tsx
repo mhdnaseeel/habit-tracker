@@ -7,10 +7,11 @@ import {
   GoalPlanner,
   InsightsPanel,
   ReportsPanel,
-  JournalPanel,
   SettingsPanel,
   TaskTracker,
 } from './features.tsx';
+import { JournalPanel } from './journal.tsx';
+import { MentorPanel } from './mentor.tsx';
 import './styles.css';
 const categories = [
   'Wellbeing',
@@ -59,6 +60,7 @@ type View =
   | 'insights'
   | 'reports'
   | 'journal'
+  | 'mentor'
   | 'settings';
 class ApiError extends Error {
   constructor(
@@ -84,6 +86,7 @@ function App() {
   const formHeading = useRef<HTMLHeadingElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const navigation = useRef<HTMLElement>(null);
+  const journalLeave = useRef<(() => Promise<boolean>) | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [today, setToday] = useState<Today | null>(null);
   const [historyWeek, setHistoryWeek] = useState<HistoryWeek | null>(null);
@@ -407,6 +410,12 @@ function App() {
     }
   }
   async function signOut() {
+    if (
+      view === 'journal' &&
+      journalLeave.current &&
+      !(await journalLeave.current())
+    )
+      return;
     setBusy(true);
     try {
       await request('/api/v1/logout', 'POST');
@@ -454,7 +463,14 @@ function App() {
     setView('today');
     setNotice('Your account was deleted.');
   }
-  function navigate(next: View) {
+  async function navigate(next: View) {
+    if (
+      view === 'journal' &&
+      next !== 'journal' &&
+      journalLeave.current &&
+      !(await journalLeave.current())
+    )
+      return;
     setMenuOpen(false);
     if (next === 'habits') void showHabits();
     else if (next === 'history') showHistory();
@@ -462,6 +478,17 @@ function App() {
       closeHabitForm();
       setView('today');
     } else showOther(next);
+  }
+  function openMentorArea(area: 'Habit' | 'Task' | 'Goal' | 'Journal') {
+    const target: View =
+      area === 'Habit'
+        ? 'habits'
+        : area === 'Task'
+          ? 'tasks'
+          : area === 'Goal'
+            ? 'goals'
+            : 'journal';
+    void navigate(target);
   }
   const sections: { view: View; label: string }[] = [
     { view: 'today', label: 'Today' },
@@ -472,6 +499,7 @@ function App() {
     { view: 'goals', label: 'Goals' },
     { view: 'insights', label: 'Insights' },
     { view: 'journal', label: 'Journal' },
+    { view: 'mentor', label: 'AI Mentor' },
     { view: 'settings', label: 'Settings' },
   ];
   return (
@@ -606,7 +634,7 @@ function App() {
                 key={section.view}
                 className={view === section.view ? 'active quiet' : 'quiet'}
                 aria-current={view === section.view ? 'page' : undefined}
-                onClick={() => navigate(section.view)}
+                onClick={() => void navigate(section.view)}
               >
                 {section.label}
               </button>
@@ -734,10 +762,19 @@ function App() {
             <ReportsPanel api={request} />
           ) : view === 'journal' ? (
             today ? (
-              <JournalPanel api={request} today={today.date} />
+              <JournalPanel
+                api={request}
+                today={today.date}
+                onRegisterLeave={(handler) => {
+                  journalLeave.current = handler;
+                }}
+                onOpenArea={openMentorArea}
+              />
             ) : (
               <p>Loading journal…</p>
             )
+          ) : view === 'mentor' ? (
+            <MentorPanel api={request} onOpenArea={openMentorArea} />
           ) : (
             <SettingsPanel api={request} onDeleted={accountDeleted} />
           )}

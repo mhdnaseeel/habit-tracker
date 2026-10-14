@@ -52,7 +52,7 @@ type Suggestion = {
   action: string;
 };
 
-async function overview(pool: pg.Pool, userId: string) {
+export async function overview(pool: pg.Pool, userId: string) {
   const timezone = (
     await pool.query<{ timezone: string }>(
       'SELECT timezone FROM users WHERE id=$1',
