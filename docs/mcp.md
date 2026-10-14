@@ -10,6 +10,8 @@ The hosted Habit Mentor MCP server lets a compatible AI client read one Habit Tr
 4. After returning to the client, confirm it discovers tools. Ask, for example, “Use `get_today_context` to show what is due today and identify up to three practical priorities.”
 5. To end access, open **Settings → Remote AI connections** in Habit Tracker and select **Disconnect** next to the client.
 
+For ChatGPT, use **Plugins → Add → Add custom MCP server**. Enter a name such as **Habit Mentor** and the hosted endpoint above. Keep **OAuth** authentication, review the discovered **Dynamic Client Registration (DCR)** method and `habit.read` scope, then create the plugin. Select **Continue to Habit Mentor**, approve the Habit Tracker consent page, and use **Try in chat** to request a read-only tool such as `get_today_context`.
+
 The client discovers the protected-resource and authorization-server metadata, registers as a public client, and exchanges an authorization code for an account-bound token. Access tokens expire after one hour; refresh tokens rotate on use; grants expire after 30 days of inactivity. Disconnecting immediately blocks further tool access. The app does not display raw OAuth tokens in the browser.
 
 ## Data and permissions
@@ -46,6 +48,8 @@ Each backend call has an eight-second timeout and a 256 KiB response cap; combin
 
 ## Verification and compatibility
 
-The official TypeScript MCP SDK v2 client completed automatic discovery, dynamic registration, PKCE authorization, token exchange, tool discovery and a read-only tool call against the hosted URL. A disposable account used for that check was deleted afterward. Named AI products such as Claude and ChatGPT have not been verified with this endpoint; their remote MCP and OAuth support may differ.
+The official TypeScript MCP SDK v2 client completed automatic discovery, dynamic registration, PKCE authorization, token exchange, and calls to all ten read-only tools against the hosted URL. A disposable account used for the integration test was deleted afterward.
+
+On 14 October 2026, a ChatGPT custom MCP plugin discovered the hosted OAuth endpoints, used Dynamic Client Registration and `habit.read`, and connected to a real Habit Tracker account. A ChatGPT conversation invoked `get_today_context` and returned the account's local date, timezone and due-habit count. The account listed an active ChatGPT connection; hosted logs showed successful `/mcp` and account-profile reads. The automated in-app browser did not follow the consent form's 302 redirect, so the callback URL was opened manually during verification. This proves the connection and tool call, but does not prove that every browser follows the consent redirect unaided. Claude and other named AI products remain unverified.
 
 The server currently uses `@modelcontextprotocol/sdk` 1.32.1 and interoperated with the tested SDK v2 client. Other protocol revisions are not claimed. See the [requirement check](mcp-requirements.md) and [phase audit](mcp-phase-audit.md) for the exact evidence and open checks. The authorization design follows the [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization).

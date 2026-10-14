@@ -12,6 +12,8 @@ The deployed Habit Mentor MCP endpoint is **`https://habit-tracker-xard.onrender
 4. Return to the AI agent and confirm that it lists the Habit Mentor tools. Ask it to use a tool, for example: “Use `get_today_context` and tell me which routines are due today and what I should focus on.” If the client supports MCP prompts, it may also show `daily_mentor`, `weekly_mentor`, and `journal_reflection`.
 5. To remove access, open **Settings → Remote AI connections** in Habit Tracker and select **Disconnect** beside the client. Its grant then loses access. The OAuth client normally refreshes one-hour access tokens automatically; a grant expires after 30 days of inactivity.
 
+In ChatGPT, open **Plugins → Add → Add custom MCP server**. Name it **Habit Mentor**, enter the endpoint above as the server URL, leave authentication on **OAuth**, and confirm that discovery selects **Dynamic Client Registration (DCR)** with the `habit.read` scope. Create the plugin, select **Continue to Habit Mentor**, and approve the Habit Tracker consent page. After it connects, choose **Try in chat** and ask ChatGPT to use `get_today_context`.
+
 The server exposes these **read-only** tools; it cannot complete habits, edit tasks, save journal entries, export an account, or change settings:
 
 | Tool                        | Example use                                                   |
@@ -31,7 +33,7 @@ For example, ask “Use `get_weekly_review_context` to identify two strengths an
 
 If connection fails, first check [service readiness](https://habit-tracker-xard.onrender.com/health/ready) and allow for a Render Free cold start. An OAuth/redirect error may mean the client lacks remote MCP OAuth, PKCE, or a supported callback; try a compatible client and reconnect. A `401` after connection usually means an expired or disconnected grant; reconnect and approve again. For `429`, wait before retrying. If a tool returns no records, check the account and requested dates; if it reports a size limit, shorten the range. A `5xx` or failed readiness check indicates a hosted service/database problem.
 
-The hosted OAuth flow and a read-only tool call were verified with the official TypeScript MCP SDK v2 client. Individual AI products, including Claude and ChatGPT, have **not** been verified; their support for remote MCP and this OAuth flow can differ. See [MCP details and compatibility](docs/mcp.md) for the security model and current test status.
+The hosted OAuth flow and all ten read-only tools were verified with the official TypeScript MCP SDK v2 client. On 14 October 2026, ChatGPT connected with OAuth and returned account data through `get_today_context`; Habit Tracker showed an active ChatGPT grant and the hosted logs showed successful MCP and account-profile reads. The automated in-app browser did not follow the consent redirect, so that callback was completed manually during verification; an ordinary browser redirect has not been separately verified. Claude and other named clients remain unverified. See [MCP details and compatibility](docs/mcp.md) for the security model and current test status.
 
 ## Host a free preview
 
