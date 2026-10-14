@@ -288,7 +288,10 @@ export async function registerMcpRemote(
         destination.searchParams.set('error', 'access_denied');
         destination.searchParams.set('state', pending.state);
         destination.searchParams.set('iss', issuer);
-        return reply.redirect(destination.toString());
+        // A consent decision is submitted as a form POST. Use 303 so browsers
+        // reliably follow the external OAuth callback with GET rather than
+        // attempting to preserve or replay the POST request.
+        return reply.redirect(destination.toString(), 303);
       }
       if (!input.data.email || !input.data.password)
         return oauthError(reply, 400, 'invalid_request');
@@ -340,7 +343,7 @@ export async function registerMcpRemote(
       destination.searchParams.set('iss', issuer);
       return reply
         .header('Referrer-Policy', 'no-referrer')
-        .redirect(destination.toString());
+        .redirect(destination.toString(), 303);
     },
   );
 

@@ -167,7 +167,7 @@ test(
             password,
           }),
         });
-        assert.equal(approved.status, 302);
+        assert.equal(approved.status, 303);
         const location = new URL(approved.headers.get('location'));
         assert.equal(location.origin, origin);
         assert.equal(location.searchParams.get('state'), 'test-state');
@@ -297,7 +297,7 @@ test(
             password,
           }),
         });
-        assert.equal(secondApproval.status, 302);
+        assert.equal(secondApproval.status, 303);
         const secondCode = new URL(
           secondApproval.headers.get('location'),
         ).searchParams.get('code');
@@ -410,7 +410,7 @@ test(
           password,
         }),
       });
-      assert.equal(modernApproval.status, 302);
+      assert.equal(modernApproval.status, 303);
       const modernParams = new URL(modernApproval.headers.get('location'))
         .searchParams;
       assert.equal(modernParams.get('state'), provider.stateValue);
