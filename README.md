@@ -1,8 +1,37 @@
 # Habit Tracker
 
-For the local and remote, read-only Habit Mentor MCP integration, see [docs/mcp.md](docs/mcp.md). It uses the connected client's own model and no separate model API key.
-
 A habit tracker driven by the two original PRDs and the product owner's later feature list. The app includes a time-based Today agenda, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, daily journal entries with blueprints and account-saved drafts, optional AI Mentor guidance, account export/deletion, and a read-only MCP connector with local stdio and remote OAuth access. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. See [Daily Journal and AI Mentor](docs/journal-mentor.md) for privacy and API details.
+
+## Connect an AI agent to the hosted MCP server
+
+The production-deployed Habit Mentor MCP endpoint is **`https://habit-tracker-xard.onrender.com/mcp`**. It uses HTTPS Streamable HTTP and OAuth; it does **not** require this repository, Docker, a local server, a local MCP token, or an OpenAI API key. The connected AI agent uses its own model. The MCP server is hosted with the app on Render Free, which can sleep after inactivity and delay the first connection; this plan does not provide always-on production availability.
+
+1. Create or sign in to your account at [Habit Tracker](https://habit-tracker-xard.onrender.com/). The hosted account is separate from any local Docker demo account.
+2. In an AI agent that supports **remote MCP over Streamable HTTP with OAuth authorization-code/PKCE and dynamic client registration**, add a custom MCP server/connector. Set its server URL to **`https://habit-tracker-xard.onrender.com/mcp`** and select OAuth authentication if the client asks. Client menu names and configuration formats vary; use the client's remote MCP setup screen. Do not enter a local `htr_` token or a static bearer token.
+3. Start the connection. The client should discover the server's OAuth metadata and open the Habit Tracker consent page. Enter your **hosted** account email and password there, review the requested **`habit.read`** scope, and approve read-only access. The permission covers your habits, check-ins, tasks, goals, insights, and journal data accessible through the tools below. Only connect a client you trust with that data; the client may send tool results to its own model provider.
+4. Return to the AI agent and confirm that it lists the Habit Mentor tools. Ask it to use a tool, for example: “Use `get_today_context` and tell me which routines are due today and what I should focus on.” If the client supports MCP prompts, it may also show `daily_mentor`, `weekly_mentor`, and `journal_reflection`.
+5. To remove access, open **Settings → Remote AI connections** in Habit Tracker and select **Disconnect** beside the client. Its grant then loses access. The OAuth client normally refreshes one-hour access tokens automatically; a grant expires after 30 days of inactivity.
+
+The server exposes these **read-only** tools; it cannot complete habits, edit tasks, save journal entries, export an account, or change settings:
+
+| Tool                        | Example use                                                   |
+| --------------------------- | ------------------------------------------------------------- |
+| `get_today_context`         | Today's due habits, timed activities, tasks, and active goals |
+| `get_habit_summary`         | Habit list and recent consistency summary                     |
+| `get_habit_history`         | Check-ins across a selected date range                        |
+| `get_habit_details`         | One habit and its recent logs                                 |
+| `get_task_summary`          | Tasks in a selected date range                                |
+| `get_goal_progress`         | Active goals and progress                                     |
+| `get_journal_blueprints`    | Available journal prompts, without private entries            |
+| `get_journal_entry`         | One private daily journal entry                               |
+| `get_weekly_review_context` | Habits, tasks, goals, and insights for a week                 |
+| `get_mentor_context`        | Bounded context for guidance; journal dates/statuses only     |
+
+For example, ask “Use `get_weekly_review_context` to identify two strengths and one practical next step this week,” or “Use `get_habit_history` for the last 14 days and separate observed patterns from guesses.” Only ask the agent to read a journal entry when you want that private text included. Date-range tools accept at most 31 dates; narrower requests and pagination help with large accounts.
+
+If connection fails, first check [service readiness](https://habit-tracker-xard.onrender.com/health/ready) and allow for a Render Free cold start. An OAuth/redirect error may mean the client lacks remote MCP OAuth, PKCE, or a supported HTTPS/loopback callback; try a compatible client and reconnect. A `401` after connection usually means an expired or disconnected grant; reconnect and approve again. For `429`, wait before retrying. If a tool returns no records, check the account and requested dates; if it reports a size limit, shorten the range. A `5xx` or failed readiness check indicates a hosted service/database problem rather than a local process to start.
+
+The hosted OAuth flow and a read-only tool call were verified with the official TypeScript MCP SDK v2 client. Individual AI products, including Claude and ChatGPT, have **not** been verified; their support for remote MCP and this OAuth flow can differ. See [MCP details and compatibility](docs/mcp.md) for the security model and current test status.
 
 ## Run everything in Docker
 
