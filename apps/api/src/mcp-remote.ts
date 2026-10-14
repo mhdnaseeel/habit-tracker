@@ -256,7 +256,14 @@ export async function registerMcpRemote(
       config: { rateLimit: { max: 8, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      if (request.headers.origin !== origin)
+      // Some agent webviews omit Origin or send "null" for a top-level form.
+      // The one-time request ID and account password still gate approval.
+      const submittedOrigin = request.headers.origin;
+      if (
+        submittedOrigin &&
+        submittedOrigin !== 'null' &&
+        submittedOrigin !== origin
+      )
         return oauthError(reply, 403, 'access_denied');
       const input = consent.safeParse(request.body);
       if (!input.success) return oauthError(reply, 400, 'invalid_request');

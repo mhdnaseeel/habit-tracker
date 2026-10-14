@@ -158,7 +158,6 @@ test(
           method: 'POST',
           redirect: 'manual',
           headers: {
-            Origin: origin,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
@@ -288,7 +287,7 @@ test(
           method: 'POST',
           redirect: 'manual',
           headers: {
-            Origin: origin,
+            Origin: 'null',
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           body: new URLSearchParams({
@@ -402,7 +401,6 @@ test(
         method: 'POST',
         redirect: 'manual',
         headers: {
-          Origin: origin,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
