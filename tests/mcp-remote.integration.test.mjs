@@ -26,6 +26,16 @@ if (
     'Remote MCP integration tests only run locally or against the opted-in Habit Tracker host',
   );
 
+async function callbackFrom(response) {
+  assert.equal(response.status, 200);
+  const document = await response.text();
+  const href = document
+    .match(/<a href="([^"]+)">Return to your AI client<\/a>/)?.[1]
+    .replaceAll('&amp;', '&');
+  assert.ok(href);
+  return new URL(href);
+}
+
 async function request(path, method = 'GET', body, token) {
   const response = await fetch(base + path, {
     method,
@@ -167,8 +177,7 @@ test(
             password,
           }),
         });
-        assert.equal(approved.status, 303);
-        const location = new URL(approved.headers.get('location'));
+        const location = await callbackFrom(approved);
         assert.equal(location.origin, origin);
         assert.equal(location.searchParams.get('state'), 'test-state');
         assert.equal(location.searchParams.get('iss'), origin);
@@ -297,9 +306,8 @@ test(
             password,
           }),
         });
-        assert.equal(secondApproval.status, 303);
-        const secondCode = new URL(
-          secondApproval.headers.get('location'),
+        const secondCode = (
+          await callbackFrom(secondApproval)
         ).searchParams.get('code');
         assert.ok(secondCode);
         const secondGrant = await token(clientId, {
@@ -410,9 +418,7 @@ test(
           password,
         }),
       });
-      assert.equal(modernApproval.status, 303);
-      const modernParams = new URL(modernApproval.headers.get('location'))
-        .searchParams;
+      const modernParams = (await callbackFrom(modernApproval)).searchParams;
       assert.equal(modernParams.get('state'), provider.stateValue);
       await firstTransport.finishAuth(modernParams);
       assert.ok(provider.tokenSet?.access_token);
