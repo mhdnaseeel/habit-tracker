@@ -1,8 +1,8 @@
 # Requirement traceability
 
-Status vocabulary: planned / implemented-unverified / verified. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged. The current manual-check workflow cannot provide the same regression confidence as the removed automated suite.
+Status vocabulary: planned / implemented-unverified / verified. Source line anchors identify each independent source paragraph or bullet; both PRDs remain unchanged. Automated integration checks cover the highest-risk API, journal, activity, AI-provider, and MCP paths; browser interaction coverage remains manual.
 
-Local Docker milestone (2026-10-07): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx, with an optional local MCP profile. `scripts/docker-up.sh` starts the stack and `scripts/docker-seed.sh` creates manual-review data. The 19 unit and 21 integration tests that passed on 2026-10-06 were removed at the product owner's request. References to those tests below are historical evidence, not a current automated suite. Production and hot-reload requirements remain open.
+Local Docker milestone (2026-10-07): `compose.yaml` runs PostgreSQL, a migration job, Fastify and Nginx, with an optional local MCP profile. `scripts/docker-up.sh` starts the stack. The current integration suite creates disposable local accounts and removes them after each run; it cannot target production. Production and hot-reload requirements remain open.
 
 Expanded feature request (2026-10-06):
 

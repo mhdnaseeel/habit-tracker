@@ -8,7 +8,6 @@ Docker and OpenSSL are the only host dependencies; Node and npm run inside conta
 
 ```sh
 ./scripts/docker-up.sh
-./scripts/docker-seed.sh
 ```
 
 The startup script creates ignored `.env.docker` with random credentials on first run, builds the images, starts PostgreSQL, runs migrations, and starts the API and web containers. Open `http://127.0.0.1:8080`. The API is available through the same origin at `/api/v1`; readiness is `/health/ready` and Swagger is `/api/docs`. To change the port, edit `APP_PORT` in `.env.docker` and rerun the startup script. Use the exact `127.0.0.1` origin for development auth.
@@ -18,7 +17,7 @@ docker compose --env-file .env.docker logs -f api web
 docker compose --env-file .env.docker down
 ```
 
-The seed script creates an isolated demo account with seven sample routines, recent check-ins, tasks, four timed agenda blocks, a goal, mindset ratings, and a daily journal entry. It prints generated login details and stores them in ignored `.env.demo`. Reruns reuse existing named records and add missing samples; they do not modify other accounts. `down` keeps the named PostgreSQL volume; `down -v` deletes development database data. This Compose stack serves HTTP and does not meet production TLS, backup, or deployment requirements.
+Create development accounts through the application so local data follows the same paths as production. `down` keeps the named PostgreSQL volume; `down -v` deletes development database data. This Compose stack serves HTTP and does not meet production TLS, backup, or deployment requirements.
 
 ## Optional stdio MCP connector
 
