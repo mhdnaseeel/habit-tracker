@@ -8,11 +8,7 @@
     "start": "node dist/apps/mcp/src/main.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "pg": "^8.0.0",
+    "@modelcontextprotocol/sdk": "1.32.1",
     "zod": "^4.0.0"
-  },
-  "devDependencies": {
-    "@types/pg": "^8.0.0"
   }
 }

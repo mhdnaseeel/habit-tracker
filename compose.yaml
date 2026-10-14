@@ -78,12 +78,12 @@ services:
       context: .
       target: mcp
     environment:
-      DATABASE_URL: postgresql://habit:${POSTGRES_PASSWORD}@db:5432/habit
+      HABIT_API_URL: http://api:3001
       MCP_READ_TOKEN: ${MCP_READ_TOKEN:-}
     stdin_open: true
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      api:
+        condition: service_healthy
     restart: 'no'
 
 volumes:

@@ -45,6 +45,23 @@ const mcpTokenSchema = z
   .strict();
 const mcpIdSchema = z.object({ id: z.uuid() });
 const uuid = z.uuid();
+const mcpReadableRoutes = new Set([
+  '/api/v1/mcp/profile',
+  '/api/v1/today',
+  '/api/v1/history',
+  '/api/v1/habits',
+  '/api/v1/habits/:id',
+  '/api/v1/habits/:id/logs',
+  '/api/v1/tasks',
+  '/api/v1/activities',
+  '/api/v1/goals',
+  '/api/v1/mindset',
+  '/api/v1/insights',
+  '/api/v1/journal/blueprints',
+  '/api/v1/journal/history',
+  '/api/v1/journal/:date',
+  '/api/v1/journal/:date/context',
+]);
 interface UserRow {
   id: string;
   email: string;
@@ -198,6 +215,28 @@ export async function registerAuth(
   ): Promise<Principal | undefined> {
     const token = authHeaders(request);
     if (!token) return;
+    if (/^htr_[A-Za-z0-9_-]{43}$/.test(token)) {
+      if (
+        request.method !== 'GET' ||
+        !mcpReadableRoutes.has(request.routeOptions.url ?? '')
+      )
+        return;
+      const row = (
+        await pool.query<{
+          id: string;
+          user_id: string;
+          role: 'user' | 'admin';
+        }>(
+          `SELECT t.id,t.user_id,u.role FROM mcp_read_tokens t
+           JOIN users u ON u.id=t.user_id
+           WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now()`,
+          [hash(token)],
+        )
+      ).rows[0];
+      return row
+        ? { userId: row.user_id, sessionId: row.id, role: row.role }
+        : undefined;
+    }
     try {
       const verified = await jwtVerify(token, secret, {
         issuer: 'habit-tracker',
@@ -229,6 +268,24 @@ export async function registerAuth(
     if (!found) error(reply, request, 401, 'Authentication required');
     return found;
   }
+  app.get(
+    '/api/v1/mcp/profile',
+    {
+      schema: { tags: ['Account'], summary: 'Read assistant account timezone' },
+    },
+    async (request, reply) => {
+      const found = await requirePrincipal(request, reply);
+      if (!found) return;
+      const row = (
+        await pool.query<{ timezone: string }>(
+          'SELECT timezone FROM users WHERE id=$1',
+          [found.userId],
+        )
+      ).rows[0];
+      if (!row) return error(reply, request, 401, 'Authentication required');
+      return { timezone: row.timezone };
+    },
+  );
   async function createSession(
     client: pg.Pool | pg.PoolClient,
     user: UserRow,

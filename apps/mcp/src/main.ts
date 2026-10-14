@@ -1,514 +1,391 @@
-import { createHash } from 'node:crypto';
-import pg from 'pg';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  calculateStreak,
-  dateInTimezone,
-  datesBetween,
-  isScheduled,
-  localDate,
-  type HabitTimeline,
-} from '../../../packages/domain/src/index.ts';
 
-pg.types.setTypeParser(1082, (value) => value);
-const databaseUrl = process.env.DATABASE_URL;
 const token = process.env.MCP_READ_TOKEN;
-if (!databaseUrl || !token || !/^htr_[A-Za-z0-9_-]{43}$/.test(token)) {
-  process.stderr.write(
-    'DATABASE_URL and a valid MCP_READ_TOKEN are required.\n',
-  );
+const endpoint = new URL(process.env.HABIT_API_URL ?? 'http://api:3001');
+if (
+  !token ||
+  !/^htr_[A-Za-z0-9_-]{43}$/.test(token) ||
+  !['http:', 'https:'].includes(endpoint.protocol) ||
+  (endpoint.protocol === 'http:' &&
+    !['api', 'localhost', '127.0.0.1'].includes(endpoint.hostname)) ||
+  endpoint.username ||
+  endpoint.password ||
+  endpoint.search ||
+  endpoint.hash
+) {
+  process.stderr.write('Set a valid MCP_READ_TOKEN and HABIT_API_URL.\n');
   process.exit(1);
 }
-const pool = new pg.Pool({
-  connectionString: databaseUrl,
-  options: '-c default_transaction_read_only=on',
-  max: 3,
-});
-const tokenHash = createHash('sha256').update(token).digest('hex');
-async function owner() {
-  const row = (
-    await pool.query<{ user_id: string }>(
-      'SELECT user_id FROM mcp_read_tokens WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()',
-      [tokenHash],
-    )
-  ).rows[0];
-  return row?.user_id ?? null;
-}
-async function currentDate(userId: string) {
-  const timezone = (
-    await pool.query<{ timezone: string }>(
-      'SELECT timezone FROM users WHERE id=$1',
-      [userId],
-    )
-  ).rows[0]?.timezone;
-  if (!timezone) throw new Error('Account is unavailable');
-  return dateInTimezone(new Date(), timezone);
-}
-function result(data: unknown) {
-  return {
-    content: [{ type: 'text' as const, text: JSON.stringify(data) }],
-    structuredContent: { data },
-  };
-}
-async function read(work: (userId: string) => Promise<unknown>) {
-  try {
-    const userId = await owner();
-    if (!userId)
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: 'Read-only access token expired or revoked',
-          },
-        ],
-        isError: true,
-      };
-    return result(await work(userId));
-  } catch {
-    return {
-      content: [{ type: 'text' as const, text: 'Could not read account data' }],
-      isError: true,
-    };
-  }
-}
-const server = new McpServer({
-  name: 'habit-tracker-readonly',
-  version: '0.1.0',
-});
-const dateRange = z
-  .object({ from: z.iso.date(), to: z.iso.date() })
+
+const date = z.iso.date();
+const range = z
+  .object({ from: date, to: date })
+  .strict()
   .refine(
     ({ from, to }) =>
       from <= to && Date.parse(to) - Date.parse(from) <= 30 * 86400000,
     'Choose at most 31 dates',
   );
+const id = z.number().int().positive().max(2147483647);
+const page = z.number().int().min(1).max(100).default(1);
 
-server.registerTool(
-  'get_today',
+class BackendError extends Error {
+  constructor(
+    public status: number,
+    public requestId: string | null,
+  ) {
+    super(
+      status === 401
+        ? 'Assistant access expired or revoked'
+        : status === 404
+          ? 'Record not found'
+          : status === 429
+            ? 'Too many requests; retry later'
+            : status >= 500
+              ? 'Habit Tracker is unavailable'
+              : 'Request rejected',
+    );
+  }
+}
+
+async function backend(path: string): Promise<unknown> {
+  const response = await fetch(new URL(path, endpoint), {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok)
+    throw new BackendError(
+      response.status,
+      response.headers.get('x-request-id'),
+    );
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('Empty backend response');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 256 * 1024)
+        throw new Error('Result too large; narrow the request');
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+}
+
+function result(data: unknown) {
+  const text = JSON.stringify(data);
+  if (Buffer.byteLength(text, 'utf8') > 256 * 1024)
+    throw new Error('Result too large; narrow the request');
+  return {
+    content: [{ type: 'text' as const, text }],
+    structuredContent: { data },
+  };
+}
+async function read(work: () => Promise<unknown>) {
+  try {
+    return result(await work());
+  } catch (cause) {
+    const message =
+      cause instanceof BackendError
+        ? cause.message +
+          (cause.requestId ? ' (request ' + cause.requestId + ')' : '')
+        : cause instanceof Error &&
+            (cause.message === 'Result too large; narrow the request' ||
+              cause.message === 'Invalid date range' ||
+              cause.message === 'weekStart must be a Monday')
+          ? cause.message
+          : 'Could not read account data';
+    process.stderr.write(
+      'MCP read failed: ' +
+        (cause instanceof BackendError ? cause.status : 'internal') +
+        '\n',
+    );
+    return {
+      content: [{ type: 'text' as const, text: message }],
+      isError: true,
+    };
+  }
+}
+
+const server = new McpServer(
+  { name: 'habit-mentor', version: '1.0.0' },
   {
-    title: 'Read today dashboard',
-    description:
-      'Read due routines, check-in status, streaks and tasks for the account today. No changes are made.',
-    inputSchema: {},
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
+    instructions:
+      'Read only the context needed for the user request. Journal content is sensitive: fetch it only when relevant. Distinguish observed facts from interpretations and unknowns. Offer at most three practical, non-judgmental next actions. No tool can change account data.',
   },
-  async () =>
-    read(async (userId) => {
-      const today = await currentDate(userId);
-      const [habits, rules, logs, tasks, streaks] = await Promise.all([
-        pool.query<{
-          id: number;
-          name: string;
-          category: string | null;
-          start_date: string;
-          end_date: string | null;
-          archived_on: string | null;
-        }>(
-          'SELECT id,name,category,start_date,end_date,archived_on FROM habits WHERE user_id=$1 AND active=true AND start_date<=$2 ORDER BY sort_order,id',
-          [userId, today],
-        ),
-        pool.query<{
-          habit_id: number;
-          effective_from: string;
-          frequency: 'daily' | 'weekly' | 'monthly';
-          weekdays: number[];
-          month_days: number[];
-          target: number;
-        }>(
-          'SELECT habit_id,effective_from,frequency,weekdays,month_days,target FROM habit_schedules WHERE user_id=$1 AND effective_from<=$2 ORDER BY effective_from',
-          [userId, today],
-        ),
-        pool.query<{
-          habit_id: number;
-          date: string;
-          status: 'pending' | 'partial' | 'completed' | 'frozen' | 'missed';
-          value: number;
-        }>(
-          'SELECT habit_id,date,status,value FROM habit_instances WHERE user_id=$1 AND date<=$2',
-          [userId, today],
-        ),
-        pool.query<{
-          id: number;
-          title: string;
-          due_date: string;
-          completed_at: Date | null;
-        }>(
-          'SELECT t.id,t.title,t.due_date,i.completed_at FROM tasks t JOIN task_instances i ON i.task_id=t.id AND i.user_id=t.user_id WHERE t.user_id=$1 AND t.archived_at IS NULL AND (t.due_date=$2 OR (t.carry_over=true AND t.due_date<$2 AND i.completed_at IS NULL)) ORDER BY t.priority,t.id LIMIT 500',
-          [userId, today],
-        ),
-        pool.query<{
-          habit_id: number;
-          current_streak: number;
-          best_streak: number;
-        }>(
-          'SELECT s.habit_id,s.current_streak,s.best_streak FROM streaks s JOIN habits h ON h.id=s.habit_id WHERE h.user_id=$1',
-          [userId],
-        ),
-      ]);
-      const logIndex = new Map(
-        logs.rows
-          .filter((row) => row.date === today)
-          .map((row) => [row.habit_id, row]),
+);
+const readOnly = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+};
+function register(
+  name: string,
+  description: string,
+  inputSchema: Record<string, z.ZodTypeAny>,
+  work: (input: Record<string, unknown>) => Promise<unknown>,
+) {
+  server.registerTool(
+    name,
+    {
+      description,
+      inputSchema,
+      outputSchema: { data: z.unknown() },
+      annotations: readOnly,
+    },
+    async (input) => read(() => work(input)),
+  );
+}
+
+register(
+  'get_today_context',
+  'Read local date, due habits, activity blocks, tasks and goal priorities. No journal data.',
+  {},
+  async () => {
+    const [profile, today] = (await Promise.all([
+      backend('/api/v1/mcp/profile'),
+      backend('/api/v1/today'),
+    ])) as [
+      { timezone: string },
+      { date: string; habits: unknown[]; progress: unknown },
+    ];
+    const [activities, tasks, goals] = (await Promise.all([
+      backend('/api/v1/activities?date=' + today.date),
+      backend('/api/v1/tasks?from=' + today.date + '&to=' + today.date),
+      backend('/api/v1/goals'),
+    ])) as [
+      { activities: unknown[] },
+      { tasks: unknown[] },
+      { goals: unknown[] },
+    ];
+    return {
+      date: today.date,
+      timezone: profile.timezone,
+      habits: today.habits,
+      progress: today.progress,
+      activities: activities.activities,
+      tasks: tasks.tasks,
+      goals: goals.goals.slice(0, 10),
+    };
+  },
+);
+register(
+  'get_habit_summary',
+  'Read one page of active habits and established consistency metrics.',
+  { page },
+  async ({ page }) => {
+    const [habits, insights] = await Promise.all([
+      backend('/api/v1/habits?page=' + page + '&limit=20'),
+      backend('/api/v1/insights?weeks=4'),
+    ]);
+    return { habits, insights };
+  },
+);
+register(
+  'get_habit_history',
+  'Read scheduled dates and check-ins for at most 31 local dates.',
+  range.shape,
+  async ({ from, to }) => {
+    if (!range.safeParse({ from, to }).success)
+      throw new Error('Invalid date range');
+    return backend('/api/v1/history?from=' + from + '&to=' + to);
+  },
+);
+register(
+  'get_habit_details',
+  'Read one owned habit definition and bounded check-in history.',
+  { habitId: id, from: date, to: date },
+  async ({ habitId, from, to }) => {
+    if (!range.safeParse({ from, to }).success)
+      throw new Error('Invalid date range');
+    const [habit, logs] = await Promise.all([
+      backend('/api/v1/habits/' + habitId),
+      backend('/api/v1/habits/' + habitId + '/logs?from=' + from + '&to=' + to),
+    ]);
+    return { habit, logs };
+  },
+);
+register(
+  'get_task_summary',
+  'Read tasks within at most 31 local dates.',
+  range.shape,
+  async ({ from, to }) => {
+    if (!range.safeParse({ from, to }).success)
+      throw new Error('Invalid date range');
+    return backend('/api/v1/tasks?from=' + from + '&to=' + to);
+  },
+);
+register(
+  'get_goal_progress',
+  'Read active owned goals with backend-calculated progress and linked habits.',
+  {},
+  async () => {
+    const data = (await backend('/api/v1/goals')) as {
+      goals: unknown[];
+      areas: unknown;
+    };
+    return {
+      goals: data.goals.slice(0, 30),
+      total: data.goals.length,
+      areas: data.areas,
+    };
+  },
+);
+register(
+  'get_journal_blueprints',
+  'Read daily reflection templates without personal entries.',
+  {},
+  async () => backend('/api/v1/journal/blueprints'),
+);
+register(
+  'get_journal_entry',
+  'Read one private daily journal entry only when relevant to the user request.',
+  { date },
+  async ({ date }) => backend('/api/v1/journal/' + date),
+);
+register(
+  'get_weekly_review_context',
+  'Read a seven-day review with established habit, task, goal and insight data. No journal text.',
+  { weekStart: date },
+  async ({ weekStart }) => {
+    const start = new Date(String(weekStart) + 'T00:00:00Z');
+    if (start.getUTCDay() !== 1) throw new Error('weekStart must be a Monday');
+    const to = new Date(start.getTime() + 6 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const [history, tasks, goals, insights] = await Promise.all([
+      backend('/api/v1/history?from=' + weekStart + '&to=' + to),
+      backend('/api/v1/tasks?from=' + weekStart + '&to=' + to),
+      backend('/api/v1/goals'),
+      backend('/api/v1/insights?weeks=4'),
+    ]);
+    return { from: weekStart, to, history, tasks, goals, insights };
+  },
+);
+register(
+  'get_mentor_context',
+  'Retrieve selected bounded categories. Journal text is never included.',
+  {
+    from: date,
+    to: date,
+    categories: z
+      .array(z.enum(['habits', 'tasks', 'goals', 'insights', 'journal_dates']))
+      .min(1)
+      .max(5),
+  },
+  async ({ from, to, categories }) => {
+    if (!range.safeParse({ from, to }).success)
+      throw new Error('Invalid date range');
+    const selected = categories as string[];
+    const output: Record<string, unknown> = { from, to };
+    if (selected.includes('habits'))
+      output.habits = await backend(
+        '/api/v1/history?from=' + from + '&to=' + to,
       );
-      const streakIndex = new Map(
-        streaks.rows.map((row) => [row.habit_id, row]),
+    if (selected.includes('tasks'))
+      output.tasks = await backend('/api/v1/tasks?from=' + from + '&to=' + to);
+    if (selected.includes('goals'))
+      output.goals = await backend('/api/v1/goals');
+    if (selected.includes('insights'))
+      output.insights = await backend('/api/v1/insights?weeks=4');
+    if (selected.includes('journal_dates'))
+      output.journalDates = await backend(
+        '/api/v1/journal/history?from=' + from + '&to=' + to,
       );
-      const due = habits.rows.flatMap((habit) => {
-        const revisions = rules.rows
-          .filter((rule) => rule.habit_id === habit.id)
-          .map((rule) => ({
-            effectiveFrom: localDate(rule.effective_from),
-            target: rule.target,
-            schedule:
-              rule.frequency === 'daily'
-                ? { frequency: 'daily' as const }
-                : rule.frequency === 'weekly'
-                  ? { frequency: 'weekly' as const, weekdays: rule.weekdays }
-                  : {
-                      frequency: 'monthly' as const,
-                      monthDays: rule.month_days,
-                    },
-          }));
-        const timeline: HabitTimeline = {
-          startDate: localDate(habit.start_date),
-          ...(habit.end_date ? { endDate: localDate(habit.end_date) } : {}),
-          ...(habit.archived_on
-            ? { archivedOn: localDate(habit.archived_on) }
-            : {}),
-          revisions,
-        };
-        if (!isScheduled(timeline, today)) return [];
-        const cached = streakIndex.get(habit.id);
-        const streak = calculateStreak(
-          timeline,
-          logs.rows
-            .filter((row) => row.habit_id === habit.id)
-            .map((row) => ({
-              date: localDate(row.date),
-              status: row.status,
-              value: row.value,
-            })),
-          today,
-          cached?.best_streak ?? 0,
-        );
-        return [
-          {
-            id: habit.id,
-            name: habit.name,
-            category: habit.category,
-            target: revisions.at(-1)?.target ?? 1,
-            status: logIndex.get(habit.id)?.status ?? 'pending',
-            value: logIndex.get(habit.id)?.value ?? 0,
-            streak: { current: streak.current, best: streak.bestEver },
-          },
-        ];
-      });
-      const completed = due.filter(
-        (habit) => habit.status === 'completed',
-      ).length;
-      return {
-        date: today,
-        habits: due,
-        progress: {
-          completed,
-          due: due.length,
-          percentage: due.length
-            ? Math.round((completed / due.length) * 100)
-            : null,
+    return output;
+  },
+);
+
+server.registerPrompt(
+  'daily_mentor',
+  {
+    description:
+      'Plan a calm, evidence-based day with at most three practical actions.',
+  },
+  () => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text: 'Use get_today_context. Identify up to three concrete priorities. Separate facts, inferences, and unknowns. Do not read journal entries unless relevant. Avoid guilt and invented causes.',
         },
-        tasks: tasks.rows.map((task) => ({
-          id: task.id,
-          title: task.title,
-          dueDate: task.due_date,
-          completed: task.completed_at !== null,
-        })),
-      };
-    }),
+      },
+    ],
+  }),
 );
-
-server.registerTool(
-  'list_routines',
+server.registerPrompt(
+  'weekly_mentor',
   {
-    title: 'List routines',
     description:
-      'Read active routines and their daily, weekly or monthly schedules. No changes are made.',
-    inputSchema: { page: z.number().int().positive().default(1) },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
+      'Review a week using recorded activity and existing consistency metrics.',
+    argsSchema: { weekStart: date },
   },
-  async ({ page }) =>
-    read(async (userId) => {
-      const rows = (
-        await pool.query(
-          'SELECT h.id,h.name,h.description,h.category,s.effective_from,s.frequency,s.weekdays,s.month_days,s.target FROM habits h JOIN habit_schedules s ON s.habit_id=h.id AND s.user_id=h.user_id WHERE h.user_id=$1 AND h.active=true AND s.id=(SELECT s2.id FROM habit_schedules s2 WHERE s2.habit_id=h.id ORDER BY effective_from DESC LIMIT 1) ORDER BY h.sort_order,h.id LIMIT 100 OFFSET $2',
-          [userId, (page - 1) * 100],
-        )
-      ).rows;
-      return { page, routines: rows };
-    }),
+  ({ weekStart }) => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'Use get_weekly_review_context for Monday ' +
+            weekStart +
+            '. Recognize progress and documented obstacles, compare established metrics, ask reflection questions, and suggest a manageable next week. Do not infer diagnoses or motivations.',
+        },
+      },
+    ],
+  }),
 );
-
-server.registerTool(
-  'get_habit_grid',
+server.registerPrompt(
+  'journal_reflection',
   {
-    title: 'Read habit grid',
     description:
-      'Read scheduled dates and recorded check-ins over at most 31 local dates. Includes archived history. No changes are made.',
-    inputSchema: dateRange.shape,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
+      'Reflect using a daily blueprint without changing stored content.',
+    argsSchema: { date },
   },
-  async ({ from, to }) =>
-    read(async (userId) => {
-      if (!dateRange.safeParse({ from, to }).success)
-        throw new Error('Invalid date range');
-      const today = await currentDate(userId);
-      const [habits, rules, logs] = await Promise.all([
-        pool.query<{
-          id: number;
-          name: string;
-          category: string | null;
-          start_date: string;
-          end_date: string | null;
-          archived_on: string | null;
-        }>(
-          'SELECT id,name,category,start_date,end_date,archived_on FROM habits WHERE user_id=$1 AND start_date<=$3 AND (end_date IS NULL OR end_date>=$2) AND (archived_on IS NULL OR archived_on>$2) ORDER BY sort_order,id',
-          [userId, from, to],
-        ),
-        pool.query<{
-          habit_id: number;
-          effective_from: string;
-          frequency: 'daily' | 'weekly' | 'monthly';
-          weekdays: number[];
-          month_days: number[];
-          target: number;
-        }>(
-          'SELECT habit_id,effective_from,frequency,weekdays,month_days,target FROM habit_schedules WHERE user_id=$1 AND effective_from<=$2 ORDER BY effective_from',
-          [userId, to],
-        ),
-        pool.query<{
-          habit_id: number;
-          date: string;
-          status: string;
-          value: number;
-        }>(
-          'SELECT habit_id,date,status,value FROM habit_instances WHERE user_id=$1 AND date BETWEEN $2 AND $3',
-          [userId, from, to],
-        ),
-      ]);
-      return {
-        from,
-        to,
-        habits: habits.rows.map((habit) => {
-          const revisions = rules.rows
-            .filter((rule) => rule.habit_id === habit.id)
-            .map((rule) => ({
-              effectiveFrom: localDate(rule.effective_from),
-              target: rule.target,
-              schedule:
-                rule.frequency === 'daily'
-                  ? { frequency: 'daily' as const }
-                  : rule.frequency === 'weekly'
-                    ? { frequency: 'weekly' as const, weekdays: rule.weekdays }
-                    : {
-                        frequency: 'monthly' as const,
-                        monthDays: rule.month_days,
-                      },
-            }));
-          const timeline: HabitTimeline = {
-            startDate: localDate(habit.start_date),
-            ...(habit.end_date ? { endDate: localDate(habit.end_date) } : {}),
-            ...(habit.archived_on
-              ? { archivedOn: localDate(habit.archived_on) }
-              : {}),
-            revisions,
-          };
-          const ownLogs = new Map(
-            logs.rows
-              .filter((log) => log.habit_id === habit.id)
-              .map((log) => [log.date, log]),
-          );
-          return {
-            id: habit.id,
-            name: habit.name,
-            category: habit.category,
-            days: datesBetween(localDate(from), localDate(to)).map((date) => ({
-              date,
-              scheduled: isScheduled(timeline, date),
-              status:
-                ownLogs.get(date)?.status ??
-                (isScheduled(timeline, date)
-                  ? date > today
-                    ? 'upcoming'
-                    : date < today
-                      ? 'missed'
-                      : 'pending'
-                  : null),
-              value: ownLogs.get(date)?.value ?? 0,
-            })),
-          };
-        }),
-      };
-    }),
+  ({ date }) => ({
+    messages: [
+      {
+        role: 'user',
+        content: {
+          type: 'text',
+          text:
+            'For ' +
+            date +
+            ', read get_journal_blueprints and get_journal_entry only when I request reflection. Ask relevant questions, distinguish my words from interpretation, and never silently rewrite my entry.',
+        },
+      },
+    ],
+  }),
 );
 
-server.registerTool(
-  'list_tasks',
-  {
-    title: 'Read tasks',
-    description:
-      'Read owned tasks due in a date range of at most 31 days. No changes are made.',
-    inputSchema: dateRange.shape,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ from, to }) =>
-    read(async (userId) => {
-      if (!dateRange.safeParse({ from, to }).success)
-        throw new Error('Invalid date range');
-      return {
-        tasks: (
-          await pool.query(
-            'SELECT t.id,t.title,t.description,t.due_date,t.priority,t.carry_over,i.completed_at FROM tasks t JOIN task_instances i ON i.task_id=t.id AND i.user_id=t.user_id WHERE t.user_id=$1 AND t.archived_at IS NULL AND t.due_date BETWEEN $2 AND $3 ORDER BY t.due_date,t.priority,t.id LIMIT 500',
-            [userId, from, to],
-          )
-        ).rows,
-      };
-    }),
-);
-
-server.registerTool(
-  'list_goals',
-  {
-    title: 'Read goals',
-    description:
-      'Read goal titles, life areas, deadlines, steps and linked routine IDs. No changes are made.',
-    inputSchema: {},
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
-  },
-  async () =>
-    read(async (userId) => {
-      const [goals, steps, links] = await Promise.all([
-        pool.query<{
-          id: number;
-          title: string;
-          category: string | null;
-          deadline: string | null;
-        }>(
-          'SELECT id,title,category,deadline FROM goals WHERE user_id=$1 AND archived_at IS NULL ORDER BY id LIMIT 500',
-          [userId],
-        ),
-        pool.query<{
-          goal_id: number;
-          title: string;
-          completed_at: Date | null;
-        }>(
-          'SELECT goal_id,title,completed_at FROM goal_steps WHERE user_id=$1 ORDER BY goal_id,id',
-          [userId],
-        ),
-        pool.query<{ goal_id: number; habit_id: number }>(
-          'SELECT goal_id,habit_id FROM goal_habits WHERE user_id=$1 AND unlinked_on IS NULL',
-          [userId],
-        ),
-      ]);
-      return {
-        goals: goals.rows.map((goal) => ({
-          ...goal,
-          steps: steps.rows
-            .filter((step) => step.goal_id === goal.id)
-            .map((step) => ({
-              title: step.title,
-              completed: step.completed_at !== null,
-            })),
-          habitIds: links.rows
-            .filter((link) => link.goal_id === goal.id)
-            .map((link) => link.habit_id),
-        })),
-      };
-    }),
-);
-
-server.registerTool(
-  'get_daily_reflection',
-  {
-    title: 'Read daily reflection',
-    description: 'Read one daily journal entry. No changes are made.',
-    inputSchema: { date: z.iso.date() },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ date }) =>
-    read(async (userId) => ({
-      date,
-      content:
-        (
-          await pool.query<{ content: string }>(
-            'SELECT content FROM daily_journal WHERE user_id=$1 AND entry_date=$2',
-            [userId, date],
-          )
-        ).rows[0]?.content ?? null,
-    })),
-);
-
-server.registerTool(
-  'get_mindset',
-  {
-    title: 'Read mindset entries',
-    description:
-      'Read daily energy, focus and motivation over at most 31 dates. No changes are made.',
-    inputSchema: dateRange.shape,
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: false,
-    },
-  },
-  async ({ from, to }) =>
-    read(async (userId) => {
-      if (!dateRange.safeParse({ from, to }).success)
-        throw new Error('Invalid date range');
-      return {
-        entries: (
-          await pool.query(
-            'SELECT date,energy,focus,motivation FROM daily_mindset WHERE user_id=$1 AND date BETWEEN $2 AND $3 ORDER BY date',
-            [userId, from, to],
-          )
-        ).rows,
-      };
-    }),
-);
-
-if (!(await owner())) {
-  process.stderr.write('Read-only assistant token is expired or revoked.\n');
-  await pool.end();
+try {
+  await backend('/api/v1/mcp/profile');
+} catch (cause) {
+  process.stderr.write(
+    'Habit Tracker authorization failed (' +
+      (cause instanceof BackendError ? cause.status : 'unavailable') +
+      ').\n',
+  );
   process.exit(1);
 }
-process.on('SIGINT', () => {
-  void pool.end();
-});
-process.on('SIGTERM', () => {
-  void pool.end();
-});
 await server.connect(new StdioServerTransport());
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => {
+    void server.close().finally(() => process.exit(0));
+  });
+}

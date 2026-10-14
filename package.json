@@ -24,6 +24,7 @@
     "test:activities": "node --test tests/activities.integration.test.mjs",
     "test:journal": "node --test tests/journal-mentor.integration.test.mjs",
     "test:mentor-provider": "node --import tsx --test tests/mentor-provider.test.mjs",
+    "test:mcp": "node --test tests/mcp.integration.test.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run build"
   },
   "devDependencies": {
