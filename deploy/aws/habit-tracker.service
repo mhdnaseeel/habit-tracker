@@ -1,0 +1,17 @@
+[Unit]
+Description=Habit Tracker Docker application
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/habit-tracker/.env.aws
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/habit-tracker
+ExecStart=/usr/bin/docker compose --env-file .env.aws -f deploy/aws/compose.yaml up -d --build
+ExecStop=/usr/bin/docker compose --env-file .env.aws -f deploy/aws/compose.yaml down
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

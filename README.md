@@ -37,7 +37,7 @@ The hosted OAuth flow and all ten read-only tools were verified with the officia
 
 ## Deployment
 
-The repository includes a validated [Cloudflare Container deployment configuration](docs/deploy-cloudflare.md) and the previous [Render preview guide](docs/deploy-free.md). The Cloudflare path builds the existing Docker application, serves the frontend and API from one HTTPS origin, and applies PostgreSQL migrations at startup. Cloudflare Containers require Workers Paid; Cloudflare does not currently provide a free Container tier. Neon plan limits and separate OpenAI API credits still apply.
+The repository includes deployment configurations for [AWS EC2](docs/deploy-aws.md), [Cloudflare Containers](docs/deploy-cloudflare.md), and the previous [Render preview](docs/deploy-free.md). AWS and Cloudflare reuse the existing Docker application, serve the frontend and API from one HTTPS origin, and apply PostgreSQL migrations at startup. Provider compute, network, storage, Neon plan limits, and separate OpenAI API credits may apply.
 
 ## Analysis reports
 
