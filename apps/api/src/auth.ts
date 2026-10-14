@@ -237,6 +237,30 @@ export async function registerAuth(
         ? { userId: row.user_id, sessionId: row.id, role: row.role }
         : undefined;
     }
+    if (/^hto_[A-Za-z0-9_-]{43}$/.test(token)) {
+      if (
+        request.method !== 'GET' ||
+        !mcpReadableRoutes.has(request.routeOptions.url ?? '')
+      )
+        return;
+      const row = (
+        await pool.query<{
+          id: string;
+          user_id: string;
+          role: 'user' | 'admin';
+        }>(
+          `SELECT g.id,g.user_id,u.role FROM mcp_oauth_access_tokens a
+           JOIN mcp_oauth_grants g ON g.id=a.grant_id
+           JOIN users u ON u.id=g.user_id
+           WHERE a.token_hash=$1 AND a.expires_at>now()
+           AND g.revoked_at IS NULL AND g.expires_at>now() AND g.resource=$2`,
+          [hash(token), new URL('/mcp', config.WEB_ORIGIN).toString()],
+        )
+      ).rows[0];
+      return row
+        ? { userId: row.user_id, sessionId: row.id, role: row.role }
+        : undefined;
+    }
     try {
       const verified = await jwtVerify(token, secret, {
         issuer: 'habit-tracker',
@@ -598,6 +622,7 @@ export async function registerAuth(
           legacyMonthlyJournal: `SELECT month,content,version,updated_at FROM monthly_journal WHERE user_id=$1 ORDER BY month`,
           reflections: `SELECT date,habit_id,task_id,content,mood,created_at,updated_at FROM reflections WHERE user_id=$1 ORDER BY date,id`,
           assistantTokens: `SELECT id,label,created_at,expires_at,revoked_at FROM mcp_read_tokens WHERE user_id=$1 ORDER BY created_at`,
+          remoteAssistantConnections: `SELECT g.id,c.name AS client_name,g.created_at,g.expires_at,g.revoked_at FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id=g.client_id WHERE g.user_id=$1 ORDER BY g.created_at`,
         } as const;
         const data: Record<string, unknown> = {};
         for (const [key, sql] of Object.entries(tables)) {

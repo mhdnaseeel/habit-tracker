@@ -18,6 +18,7 @@ import { registerReports } from './reports.ts';
 import { registerActivities } from './activities.ts';
 import { registerJournal } from './journal.ts';
 import { registerMentor } from './mentor.ts';
+import { registerMcpRemote } from './mcp-remote.ts';
 import { healthSchema } from '../../../packages/contracts/src/index.ts';
 
 export async function createApp(
@@ -39,6 +40,10 @@ export async function createApp(
           'password',
           'password_hash',
           'token',
+          'code',
+          'code_verifier',
+          'access_token',
+          'refresh_token',
           'content',
           'DATABASE_URL',
         ],
@@ -50,6 +55,23 @@ export async function createApp(
   await app.register(helmet);
   await app.register(cors, { origin: config.WEB_ORIGIN, credentials: false });
   await app.register(rateLimit, { max: 1000, timeWindow: '15 minutes' });
+  app.addContentTypeParser(
+    'application/x-www-form-urlencoded',
+    { parseAs: 'string' },
+    (_request, body, done) => {
+      try {
+        const params = new URLSearchParams(body as string);
+        const fields: Record<string, string> = {};
+        for (const [key, value] of params) {
+          if (key in fields) throw new Error('Duplicate form field');
+          fields[key] = value;
+        }
+        done(null, fields);
+      } catch (cause) {
+        done(cause as Error);
+      }
+    },
+  );
   await app.register(swagger, {
     openapi: {
       info: {
@@ -149,6 +171,7 @@ export async function createApp(
     await registerInsights(app, pool, auth.requirePrincipal);
     await registerReports(app, pool, auth.requirePrincipal, config);
     await registerMentor(app, pool, auth.requirePrincipal, config);
+    await registerMcpRemote(app, pool, config, auth.requirePrincipal);
   }
   app.get('/api/v1/openapi.json', { schema: { hide: true } }, async () =>
     app.swagger(),

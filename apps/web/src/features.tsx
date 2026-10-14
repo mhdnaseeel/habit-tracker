@@ -1221,14 +1221,30 @@ export function SettingsPanel({
   const [assistantLabel, setAssistantLabel] = useState('My assistant');
   const [assistantPassword, setAssistantPassword] = useState('');
   const [createdToken, setCreatedToken] = useState('');
+  const [remoteConnections, setRemoteConnections] = useState<
+    {
+      id: string;
+      name: string;
+      created_at: string;
+      expires_at: string;
+      revoked_at: string | null;
+    }[]
+  >([]);
   async function loadAssistantTokens() {
     const result = await api<{ tokens: typeof assistantTokens }>(
       '/api/v1/mcp-tokens',
     );
     setAssistantTokens(result.tokens);
   }
+  async function loadRemoteConnections() {
+    const result = await api<{ connections: typeof remoteConnections }>(
+      '/api/v1/mcp/connections',
+    );
+    setRemoteConnections(result.connections);
+  }
   useEffect(() => {
     void loadAssistantTokens().catch((cause) => setError(message(cause)));
+    void loadRemoteConnections().catch((cause) => setError(message(cause)));
   }, []);
   async function createAssistantToken(event: FormEvent) {
     event.preventDefault();
@@ -1264,6 +1280,25 @@ export function SettingsPanel({
       setCreatedToken('');
       await loadAssistantTokens();
       setNotice('Assistant token revoked.');
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function revokeRemoteConnection(id: string) {
+    if (
+      !window.confirm(
+        'Disconnect this AI client? Its access will end immediately.',
+      )
+    )
+      return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('/api/v1/mcp/connections/' + id, 'DELETE');
+      await loadRemoteConnections();
+      setNotice('AI client disconnected.');
     } catch (cause) {
       setError(message(cause));
     } finally {
@@ -1409,6 +1444,48 @@ export function SettingsPanel({
                     onClick={() => void revokeAssistantToken(token.id)}
                   >
                     Revoke
+                  </button>
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
+      <div className="settings-card">
+        <h3>Remote AI connections</h3>
+        <p>
+          Connect a compatible remote MCP client using this app’s MCP URL. You
+          will sign in and approve read-only access. Connected clients can read
+          your journal when asked, so choose one you trust.
+        </p>
+        <code>{window.location.origin + '/mcp'}</code>
+        {remoteConnections.filter(
+          (connection) =>
+            !connection.revoked_at &&
+            new Date(connection.expires_at) > new Date(),
+        ).length === 0 ? (
+          <p>No remote AI clients connected.</p>
+        ) : (
+          <ul className="token-list">
+            {remoteConnections
+              .filter(
+                (connection) =>
+                  !connection.revoked_at &&
+                  new Date(connection.expires_at) > new Date(),
+              )
+              .map((connection) => (
+                <li key={connection.id}>
+                  <span>
+                    {connection.name} · expires{' '}
+                    {readableDate(connection.expires_at.slice(0, 10), {
+                      dateStyle: 'medium',
+                    })}
+                  </span>
+                  <button
+                    className="quiet"
+                    disabled={busy}
+                    onClick={() => void revokeRemoteConnection(connection.id)}
+                  >
+                    Disconnect
                   </button>
                 </li>
               ))}

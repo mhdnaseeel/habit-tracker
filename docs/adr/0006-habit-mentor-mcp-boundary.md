@@ -6,7 +6,7 @@ The backend and UI PRDs describe account-owned habits, tasks, goals, Today plann
 
 We use the existing TypeScript MCP service and the official SDK's stable v1 stdio transport. The MCP process calls allowlisted REST GET routes using an assistant token. The API resolves token ownership on every request and applies its normal owner-scoped handlers. The connector has no database credential, no separate model key and no write capability. The existing AI Guidance feature is independent and may use its provider key.
 
-We intentionally do not add Streamable HTTP at this stage. The account's current permission is read-only, and a public multi-client MCP endpoint would require OAuth, protected-resource metadata, origin validation, transport isolation and actual remote-client tests. A public endpoint with a copied local bearer token would not meet that standard. We also do not add write tools; the established read-only grant does not authorize them. Both can be designed as separate opt-in changes.
+At this stage we did not add Streamable HTTP. The later, user-approved remote OAuth implementation is recorded in ADR 0007. We continue to omit write tools under the established read-only permission.
 
 The MCP tool catalog uses existing API responses for Today, schedules, streaks, goal steps, tasks, insights and journal. It limits ranges, pages and output size, and retrieves journal content only through a dedicated single-date tool. MCP prompts guide the connected model but cannot force host-client behavior. We do not claim that a prompt, resource or remote client is verified without a protocol test.
 

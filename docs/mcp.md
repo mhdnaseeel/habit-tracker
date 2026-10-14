@@ -1,14 +1,24 @@
-# Habit Mentor MCP (local stdio)
+# Habit Mentor MCP (local and remote)
 
 The Habit Mentor MCP server lets a compatible local AI client read one Habit Tracker account and reason with that client's existing model. It makes **no model API calls** and requires no model-provider key. The web app's separate AI Guidance feature may still use `OPENAI_API_KEY`; MCP does not.
 
 ## Architecture and trust boundary
 
-`MCP client → local stdio MCP process → Habit Tracker REST API → PostgreSQL`
+`Local client → stdio MCP process → Habit Tracker REST API → PostgreSQL`
+
+`Remote client → HTTPS /mcp → account-bound MCP server → Habit Tracker REST API → PostgreSQL`
 
 The connector holds a 90-day read-only account token created in Settings. The backend stores only its SHA-256 hash, checks expiry and revocation on **every API request**, joins the token to its owner, and accepts it only for an explicit allowlist of GET routes. It cannot use account export, account settings, token management, mentor inference, or any write route. No tool accepts a user ID. The backend remains authoritative for schedules, streaks, goal progress, task status, and journal ownership. The connector has no database credentials.
 
-The MCP process is deliberately **local only**. It exposes no TCP port. This release has no remote Streamable HTTP endpoint or OAuth authorization server; it has not been verified with Claude.ai, Cowork, or other remote connector products. Publishing a remote MCP endpoint requires a separate OAuth and HTTPS design, origin validation, multi-client isolation tests, and client compatibility testing. Do not expose the local token through a public proxy.
+The local stdio process exposes no TCP port. The remote Streamable HTTP endpoint uses OAuth authorization code with PKCE S256, resource binding, short-lived access tokens, rotating refresh tokens, and account-side revocation. Its read-only tool catalog and backend route allowlist are the same as local MCP. Never put a local `htr_` token into a remote client or public proxy.
+
+## Remote HTTPS setup
+
+In a remote MCP client that supports OAuth, add `https://habit-tracker-xard.onrender.com/mcp` as a custom connector URL. The client discovers OAuth via the protected-resource and authorization-server metadata, registers as a public client, and opens the Habit Tracker consent page. Sign in there and approve **read-only** access. Settings lists remote connections and lets you disconnect each one. The app does not display or store raw OAuth tokens in the browser.
+
+Local development uses `http://127.0.0.1:8080/mcp`; public deployments require HTTPS. Access tokens expire after one hour, refresh tokens rotate on use, and a grant expires after 30 days of inactivity. A disconnected grant immediately loses tool access. The consent page asks for the account password because this OAuth flow does not reuse the SPA's JavaScript access token. A connected client may send account data to its own model provider; review the client before approving.
+
+The remote implementation has been tested with the official TypeScript SDK client over Streamable HTTP. Compatibility with Claude.ai, ChatGPT, and other hosted clients needs an actual connection test; it is not inferred from SDK success. The server uses SDK 1.32.1 and its supported protocol version, so clients requiring only a newer protocol revision may need an SDK upgrade.
 
 ## Setup
 
@@ -66,12 +76,13 @@ Troubleshooting: if startup says authorization failed, check that the main Docke
 
 See the [requirement check](mcp-requirements.md) for implemented, tested, and intentionally unsupported items.
 
-`npm run check` validates formatting, lint, types and build. `npm run test:mcp` exercises the actual SDK client and stdio transport against the **local** Docker API, including owner isolation, read/write boundaries, invalid ranges and revocation. The test creates disposable local accounts and deletes them afterward. It refuses a non-loopback `TEST_BASE_URL`.
+`npm run check` validates formatting, lint, types and build. `npm run test:mcp` exercises the stdio transport. `npm run test:mcp-remote` exercises discovery, dynamic registration, PKCE, consent, token exchange, SDK Streamable HTTP tool calls, refresh rotation, blocked writes, and disconnection. Both create disposable local accounts and delete them afterward. They refuse a non-loopback `TEST_BASE_URL`.
 
 | Client                             | Transport                 | Status                                                             | Authentication                         |
 | ---------------------------------- | ------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
 | Official TypeScript MCP SDK client | stdio via Docker launcher | Verified by `test:mcp` when it passes locally                      | Read-only token in process environment |
+| Official TypeScript MCP SDK client | Streamable HTTP           | Verified by `test:mcp-remote` locally                              | OAuth authorization code with PKCE     |
 | Claude Desktop                     | stdio                     | Configuration documented; manual UI compatibility not yet verified | Read-only token in process environment |
-| Remote AI clients                  | Streamable HTTP           | Unsupported in this release                                        | OAuth not implemented                  |
+| Hosted AI clients                  | Streamable HTTP           | Manual UI compatibility not yet verified                           | OAuth, where supported                 |
 
-The connector pins `@modelcontextprotocol/sdk` 1.32.1, the maintained v1 line, and uses the stable 2025-era stdio protocol. The official SDK's v2 line supports the 2026-07-28 protocol, but migrating both protocol and deployment is separate work; compatibility with it has not been claimed.
+The connector pins `@modelcontextprotocol/sdk` 1.32.1. Its remote authorization design follows the [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization). Protocol-version compatibility beyond the tested SDK client is not claimed.

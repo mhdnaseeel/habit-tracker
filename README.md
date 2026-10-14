@@ -1,8 +1,8 @@
 # Habit Tracker
 
-For the local, read-only Habit Mentor MCP integration, see [docs/mcp.md](docs/mcp.md). It uses the connected client's own model and no separate model API key.
+For the local and remote, read-only Habit Mentor MCP integration, see [docs/mcp.md](docs/mcp.md). It uses the connected client's own model and no separate model API key.
 
-A habit tracker driven by the two original PRDs and the product owner's later feature list. The app includes a time-based Today agenda, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, daily journal entries with blueprints and account-saved drafts, optional AI Mentor guidance, account export/deletion, and a read-only local MCP connector. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. See [Daily Journal and AI Mentor](docs/journal-mentor.md) for privacy and API details.
+A habit tracker driven by the two original PRDs and the product owner's later feature list. The app includes a time-based Today agenda, routine and schedule management, week/month habit history, one manual weekly streak freeze per routine, weekly tasks and energy/focus/motivation, a 10-area goal planner, insights, account-specific analysis reports, daily journal entries with blueprints and account-saved drafts, optional AI Mentor guidance, account export/deletion, and a read-only MCP connector with local stdio and remote OAuth access. Account data is stored in PostgreSQL; the product owner removed browser-storage copies. The UI uses the approved terracotta, evergreen, cream and sage palette. See [Daily Journal and AI Mentor](docs/journal-mentor.md) for privacy and API details.
 
 ## Run everything in Docker
 
@@ -44,7 +44,7 @@ For host-based development with Node 24, use `.env.example`, `npm ci`, `npm run 
 
 ## Build checks
 
-Run `npm run check` for formatting, lint, type checking, and builds. With the local Docker stack running, `npm run test:activities`, `npm run test:journal`, and `npm run test:mcp` exercise the Today, journal, and MCP APIs using disposable accounts. The MCP test requires Docker access and the optional MCP image. `npm run test:mentor-provider` checks structured provider responses and failure handling without using an API key. Run `npm audit --audit-level=moderate` when the npm advisory endpoint is reachable. See [Today agenda decisions](docs/today-agenda.md) for lifecycle and API details.
+Run `npm run check` for formatting, lint, type checking, and builds. With the local Docker stack running, `npm run test:activities`, `npm run test:journal`, `npm run test:mcp`, and `npm run test:mcp-remote` exercise Today, journal, local MCP and remote OAuth MCP using disposable accounts. The stdio MCP test requires the optional MCP image. `npm run test:mentor-provider` checks structured provider responses and failure handling without using an API key. Run `npm audit --audit-level=moderate` when the npm advisory endpoint is reachable. See [Today agenda decisions](docs/today-agenda.md) for lifecycle and API details.
 
 ## Project map
 
