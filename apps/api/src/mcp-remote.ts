@@ -110,29 +110,34 @@ function html(value: string) {
 }
 function returnToClient(reply: FastifyReply, destination: URL) {
   const callback = html(destination.toString());
-  return reply
-    .code(200)
-    .type('text/html; charset=utf-8')
-    .header('Cache-Control', 'no-store')
-    .header('Referrer-Policy', 'no-referrer')
-    .send(
-      [
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">',
-        '<meta name="viewport" content="width=device-width,initial-scale=1">',
-        '<meta http-equiv="refresh" content="0;url=',
-        callback,
-        '"><title>Returning to your AI client</title><style>',
-        'body{font:16px system-ui;background:#faf3f0;color:#243d35;max-width:32rem;margin:12vh auto;padding:1.5rem}',
-        'main{background:white;border-radius:1rem;padding:2rem;box-shadow:0 8px 30px #243d3520}',
-        'a{display:block;background:#b9674b;color:white;text-align:center;padding:.8rem;border-radius:.5rem;font-weight:700}',
-        '</style></head><body><main><h1>Connection decision saved</h1>',
-        '<p>Returning you to your AI client…</p><p><a href="',
-        callback,
-        '">Return to your AI client</a></p>',
-        '<p><small>If you are not redirected automatically, use the button above.</small></p>',
-        '</main></body></html>',
-      ].join(''),
-    );
+  return (
+    reply
+      .code(200)
+      .type('text/html; charset=utf-8')
+      .header('Cache-Control', 'no-store')
+      .header('Referrer-Policy', 'no-referrer')
+      // OAuth commonly runs in a popup. Helmet's same-origin default severs the
+      // opener when the popup returns to the registered cross-origin client.
+      .header('Cross-Origin-Opener-Policy', 'unsafe-none')
+      .send(
+        [
+          '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+          '<meta name="viewport" content="width=device-width,initial-scale=1">',
+          '<meta http-equiv="refresh" content="0;url=',
+          callback,
+          '"><title>Returning to your AI client</title><style>',
+          'body{font:16px system-ui;background:#faf3f0;color:#243d35;max-width:32rem;margin:12vh auto;padding:1.5rem}',
+          'main{background:white;border-radius:1rem;padding:2rem;box-shadow:0 8px 30px #243d3520}',
+          'a{display:block;background:#b9674b;color:white;text-align:center;padding:.8rem;border-radius:.5rem;font-weight:700}',
+          '</style></head><body><main><h1>Connection decision saved</h1>',
+          '<p>Returning you to your AI client…</p><p><a href="',
+          callback,
+          '">Return to your AI client</a></p>',
+          '<p><small>If you are not redirected automatically, use the button above.</small></p>',
+          '</main></body></html>',
+        ].join(''),
+      )
+  );
 }
 function constantEqual(first: string, second: string) {
   const a = Buffer.from(first);
@@ -248,6 +253,7 @@ export async function registerMcpRemote(
         .type('text/html; charset=utf-8')
         .header('Referrer-Policy', 'no-referrer')
         .header('Cache-Control', 'no-store')
+        .header('Cross-Origin-Opener-Policy', 'unsafe-none')
         .send(
           [
             '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1">',

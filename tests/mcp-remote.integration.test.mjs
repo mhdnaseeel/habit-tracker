@@ -144,6 +144,10 @@ test(
         );
         const consent = await fetch(base + '/oauth/authorize?' + query);
         assert.equal(consent.status, 200);
+        assert.equal(
+          consent.headers.get('cross-origin-opener-policy'),
+          'unsafe-none',
+        );
         const consentHtml = await consent.text();
         assert.match(consentHtml, /read-only access/);
         const requestId = consentHtml.match(
