@@ -21,6 +21,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:migrate": "node --import tsx scripts/migrate.ts",
+    "cloudflare:deploy": "wrangler deploy",
+    "cloudflare:check": "wrangler deploy --dry-run --outdir .wrangler-build",
     "test:activities": "node --test tests/activities.integration.test.mjs",
     "test:journal": "node --test tests/journal-mentor.integration.test.mjs",
     "test:mentor-provider": "node --import tsx --test tests/mentor-provider.test.mjs",
@@ -29,6 +31,7 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run build"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261014.1",
     "@eslint/js": "^9.0.0",
     "@modelcontextprotocol/client": "2.3.1",
     "@types/node": "^24.0.0",
@@ -37,6 +40,7 @@
     "prettier": "^3.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
-    "typescript-eslint": "^8.0.0"
+    "typescript-eslint": "^8.0.0",
+    "wrangler": "^4.151.0"
   }
 }

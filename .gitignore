@@ -5,4 +5,6 @@ dist/
 !.env.example
 .DS_Store
 coverage/
+.wrangler/
+.wrangler-build/
 *.log

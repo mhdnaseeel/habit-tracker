@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "habit-tracker",
+  "main": "cloudflare/worker.ts",
+  "compatibility_date": "2026-10-14",
+  "upload_source_maps": true,
+  "observability": {
+    "enabled": true,
+  },
+  "containers": [
+    {
+      "class_name": "HabitTrackerContainer",
+      "scheduling_policy": "durable_object",
+      "images": {
+        "base": {
+          "dockerfile": "./Dockerfile",
+          "build_context": ".",
+        },
+      },
+    },
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "HABIT_TRACKER",
+        "class_name": "HabitTrackerContainer",
+      },
+    ],
+  },
+  "exports": {
+    "HabitTrackerContainer": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+  },
+}

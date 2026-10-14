@@ -35,9 +35,9 @@ If connection fails, first check [service readiness](https://habit-tracker-xard.
 
 The hosted OAuth flow and all ten read-only tools were verified with the official TypeScript MCP SDK v2 client. On 14 October 2026, ChatGPT connected with OAuth and returned account data through `get_today_context`; Habit Tracker showed an active ChatGPT grant and the hosted logs showed successful MCP and account-profile reads. The consent handoff preserves OAuth popup access and provides automatic and manual return paths. Claude and other named clients remain unverified. See [MCP details and compatibility](docs/mcp.md) for the security model and current test status.
 
-## Host a free preview
+## Deployment
 
-The repository includes a [Render Blueprint and Neon setup guide](docs/deploy-free.md). It builds the `hosted` Docker target, serving the frontend and API from one HTTPS origin and applying PostgreSQL migrations at startup. Render Free sleeps when idle; Neon Free has database limits; optional AI Suggestions prioritization requires separate OpenAI API credits.
+The repository includes a validated [Cloudflare Container deployment configuration](docs/deploy-cloudflare.md) and the previous [Render preview guide](docs/deploy-free.md). The Cloudflare path builds the existing Docker application, serves the frontend and API from one HTTPS origin, and applies PostgreSQL migrations at startup. Cloudflare Containers require Workers Paid; Cloudflare does not currently provide a free Container tier. Neon plan limits and separate OpenAI API credits still apply.
 
 ## Analysis reports
 
