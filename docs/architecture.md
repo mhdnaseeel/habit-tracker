@@ -5,7 +5,8 @@ flowchart LR
  Web[React web client] --> API[Fastify REST API]
  API --> Domain[Pure domain services]
  API --> DB[(PostgreSQL)]
- LocalMCP[Local read-only MCP server] --> DB
+ LocalMCP[Local read-only MCP server] --> API
+ RemoteMCP[Remote OAuth MCP endpoint] --> API
  Worker[Planned outbox worker] --> DB
  Worker --> Providers[Planned email / push / SMS adapters]
 ```
@@ -16,6 +17,6 @@ Migration runner uses a PostgreSQL advisory lock, a per-migration transaction an
 
 Instants use timestamptz. Calendar occurrence dates use DATE and timezone context. Effective-dated schedule rows protect past recurrence and target interpretation. Postgres DATEs must be mapped to strings in repositories, never implicitly converted to server-local Date objects. Pure domain functions accept injected local today so calculations are reproducible.
 
-Current database model includes users/settings/sessions/reset tokens, habits/revisions/instances/freezes/streak cache, goals/steps/links, tasks/occurrences/copy receipts, daily mindset, daily journal entries, read-only MCP tokens, notification outbox/endpoints, audit, idempotency receipts, sync changes and feature flags. SQL integrity tests cover key negative cases; full privacy lifecycle and deployment semantics remain pending. Journal writes use a version check to reject stale cross-device edits.
+Current database model includes users/settings/sessions/reset tokens, habits/revisions/instances/freezes/streak cache, goals/steps/links, tasks/occurrences/copy receipts, daily mindset, daily journal entries, read-only MCP tokens and OAuth grants, notification outbox/endpoints, audit, idempotency receipts, sync changes and feature flags. Current integration tests cover selected flows; the previously broader SQL integrity suite was removed at the owner's request. Full privacy lifecycle and deployment semantics remain pending. Journal writes use a version check to reject stale cross-device edits.
 
-Schemas are additive refinements to the PRD: see ADR-0001 and ADR-0003 for rationale and later owner decisions. Authentication uses short-lived JWTs bound to revocable session IDs and hashed rotating refresh secrets. Passwords use Argon2id. The owner-scoped `/api/v1/history` endpoint returns up to 31 requested local dates with effective schedule, check-in status and completion counts; archived routines remain visible for dates before removal. Account state lives in PostgreSQL. The local Docker stack serves web assets through Nginx and proxies `/api/` to Fastify on an internal network; migrations run before API startup. The optional local MCP process rechecks a hashed, revocable account token on each read and uses a read-only database connection.
+Schemas are additive refinements to the PRD: see ADR-0001, ADR-0003, ADR-0006 and ADR-0007 for rationale and later owner decisions. Authentication uses short-lived JWTs bound to revocable session IDs and hashed rotating refresh secrets. Passwords use Argon2id. The owner-scoped `/api/v1/history` endpoint returns up to 31 requested local dates with effective schedule, check-in status and completion counts; archived routines remain visible for dates before removal. Account state lives in PostgreSQL. The local Docker stack serves web assets through Nginx and proxies `/api/`, `/mcp`, `/oauth/` and `/.well-known/` to Fastify on an internal network; migrations run before API startup. Local and remote MCP call owner-scoped API GET routes and have no direct database connection. The hosted Render service serves HTTPS through its platform TLS termination; availability, restore and third-party MCP client compatibility are not yet verified.

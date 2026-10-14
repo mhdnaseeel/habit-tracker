@@ -1,34 +1,31 @@
 # Living implementation checklist
 
-Updated 2026-10-12. The source PRDs remain unchanged. Later product-owner choices are recorded in ADR-0002 and ADR-0003. The product owner removed the browser-storage-copy feature and later requested removal of automated test files. Account data persists in PostgreSQL. The Docker seed command supplies a separate manual-review account. Browser accessibility and production deployment remain unverified.
+Updated 2026-10-14. The source PRDs remain unchanged. Later product-owner decisions are recorded in ADRs 0002–0007. Account data persists in PostgreSQL; the browser-storage-copy feature was removed. The current deployment is a free Render preview backed by Neon, and a separate local Docker stack is available. Neither environment has measured availability or full PRD acceptance evidence.
 
-| Area                       | Current state                                                                                                                                                          | Remaining work                                                                                |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Foundation                 | npm workspaces, strict TypeScript, Vite/React, Fastify, local Docker Compose, PostgreSQL migrations, CI, health/readiness and OpenAPI                                  | Telemetry and release deployment                                                              |
-| Authentication and account | Signup/login, Argon2, JWT, rotating HttpOnly refresh cookie, logout, profile, data export and password-confirmed deletion                                              | Reset, OAuth, production security review and backup erasure process                           |
-| Habits                     | Owner-scoped create/edit/archive, categories, daily/weekly/monthly schedules, check-in/undo, one manual weekly freeze, streaks, Today ring and week/month history grid | Browser interaction and mobile accessibility QA; reminders                                    |
-| Tasks and mindset          | Weekly task lists and daily rings, copy yesterday idempotently, complete/undo/archive, daily 1–5 energy/focus/motivation                                               | Browser interaction QA; recurring tasks from broader PRD                                      |
-| Goals and insights         | 10-area goals, steps, deadlines, habit links, progress, consistency trends, strongest/slipping and personal leaderboard                                                | Browser interaction QA; broader numeric-goal PRD semantics                                    |
-| Daily journal and MCP      | Version-checked daily journal; revocable read-only local stdio MCP tools for account data                                                                              | Browser interaction QA; remote HTTPS MCP deployment if requested                              |
-| Release audit              | Open                                                                                                                                                                   | Full PRD acceptance, security/accessibility/performance tests, operations and live deployment |
+| Area                       | Current state                                                                                                                                               | Remaining work                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Foundation                 | npm workspaces, strict TypeScript, Vite/React, Fastify, Docker Compose, PostgreSQL migrations, CI, health/readiness and OpenAPI                             | Telemetry, backup/restore drill and release operations                                            |
+| Authentication and account | Signup/login, Argon2, JWT, rotating HttpOnly refresh cookie, logout, profile, data export and password-confirmed deletion                                   | Password reset, broader OAuth sign-in, backup erasure verification and production security review |
+| Habits                     | Owner-scoped create/edit/archive, categories, daily/weekly/monthly schedules, check-in/undo, one manual weekly freeze, streaks, Today ring and history grid | Browser interaction and mobile accessibility QA; reminders                                        |
+| Tasks and mindset          | Weekly task lists and daily rings, copy yesterday, complete/undo/archive, daily energy/focus/motivation                                                     | Browser interaction QA; recurring tasks from broader PRD                                          |
+| Goals and insights         | 10-area goals, steps, deadlines, habit links, progress, trends and personal leaderboard                                                                     | Browser interaction QA; broader numeric-goal PRD semantics                                        |
+| Daily journal and MCP      | Version-checked daily journal; read-only stdio MCP; HTTPS Streamable HTTP MCP with OAuth PKCE, revocation and account consent                               | Third-party client OAuth compatibility test; wider failure/security tests; browser interaction QA |
+| Release audit              | Local checks and hosted unauthenticated MCP smoke checks pass                                                                                               | Full PRD acceptance, accessibility/performance evidence, monitoring and restore drill             |
 
 ## Verification evidence
 
-- `./scripts/docker-up.sh` built and started PostgreSQL, migration, API and web containers. PostgreSQL, API and web health checks passed; the migration applied `001_initial.sql`. Web `/`, proxied `/health/ready`, and `/api/v1/session` returned HTTP 200 on `127.0.0.1:8080`.
-- Historical evidence: on 2026-10-06, the Docker suite passed 19 unit/foundation tests and 21 PostgreSQL integration tests. Their files were removed on 2026-10-07 at the product owner's request; this evidence no longer represents an active regression suite.
-- Earlier [GitHub quality gates](https://github.com/mhdnaseeel/habit-tracker/actions/runs/37503236638) passed with the automated suite on commit `cb00c8d`; new commits use formatting, lint, typecheck, builds, and dependency audit only.
-- A proxied HTTP smoke flow passed for signup, habit creation, task creation, and Today reads; its temporary account was removed afterward.
-- Browser interaction previously verified signup, habit creation and partial/full completion with a real API/database. Browser verification of the new routine editing and history screens did not run because automatic approval review could not complete after a usage limit was hit.
-- Docker build-time `npm ci` and `npm prune` audits reported 0 vulnerabilities. This is a point-in-time npm advisory check, not a full security audit.
-- No supplied visual baselines or deployed environment exist. Production verdict: **DO NOT SHIP**.
+- On 2026-10-14, `npm run check`, `npm audit --audit-level=moderate`, `npm run test:mcp`, `npm run test:mcp-remote`, `npm run test:activities`, `npm run test:journal` and `npm run test:mentor-provider` passed locally. The integration tests use disposable accounts against Docker.
+- [GitHub CI for commit `70a3ff1`](https://github.com/mhdnaseeel/habit-tracker/actions/runs/38504282948) passed formatting, lint, type checking, build and dependency audit. It does not run database-backed integration tests.
+- The hosted preview returned HTTP 200 for `/health/ready` and OAuth protected-resource metadata, and HTTP 401 for anonymous `/mcp`. A credentialed third-party client connection to the hosted service has not been tested.
+- Historical tests removed at the owner's request do not provide current regression coverage. See the [MCP phase audit](mcp-phase-audit.md) for the scoped review.
 
 ## Source integrity
 
-The original PRDs were not modified. Their recorded SHA-256 digests are:
+The original PRDs were not modified. Their SHA-256 digests are:
 
 - Backend: `0747a78ddf9944809bb4503db011cdb51e22a3ab33ae9634e0f54e619094725a`
 - UI/UX: `f8b794d9652f8f32bb21b25f5f48b65f96c0526c9dacc90b2dea786ad8fb0c3b`
 
 ## Next dependency
 
-Perform browser and accessibility QA of the expanded screens. Production deployment still needs TLS, backup/restore and monitoring evidence. The broader PRD remains open where it calls for reminders, OAuth, offline sync and cloud operations.
+Test OAuth authorization through a chosen real client against the hosted endpoint, then verify mobile/browser accessibility and complete the broader PRD and operations audit. Read-only MCP write tools remain intentionally excluded.

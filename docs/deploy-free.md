@@ -20,4 +20,4 @@ Provider references: [Render Free limits](https://render.com/docs/free), [Render
 
 The default Render URL is supported automatically. If you attach a custom domain, set `WEB_ORIGIN` in Render to its exact HTTPS origin, without a trailing slash. Mismatched origins prevent login and refresh requests.
 
-The local Compose stack still uses its own PostgreSQL volume and `http://127.0.0.1:8080`. The local stdio MCP connector remains local; this deployment does not expose an MCP endpoint. Do not copy `.env.docker` or `.env.demo` to either provider. Keep database credentials and API keys only in provider environment settings.
+The local Compose stack still uses its own PostgreSQL volume and `http://127.0.0.1:8080`. The local stdio MCP connector remains local. The hosted service also exposes the separate, read-only [OAuth MCP endpoint](mcp.md) at `/mcp`. Do not copy `.env.docker` or `.env.demo` to either provider. Keep database credentials and API keys only in provider environment settings.

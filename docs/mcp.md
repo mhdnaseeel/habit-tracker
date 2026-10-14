@@ -18,7 +18,7 @@ In a remote MCP client that supports OAuth, add `https://habit-tracker-xard.onre
 
 Local development uses `http://127.0.0.1:8080/mcp`; public deployments require HTTPS. Access tokens expire after one hour, refresh tokens rotate on use, and a grant expires after 30 days of inactivity. A disconnected grant immediately loses tool access. The consent page asks for the account password because this OAuth flow does not reuse the SPA's JavaScript access token. A connected client may send account data to its own model provider; review the client before approving.
 
-The remote implementation has been tested with the official TypeScript SDK client over Streamable HTTP. Compatibility with Claude.ai, ChatGPT, and other hosted clients needs an actual connection test; it is not inferred from SDK success. The server uses SDK 1.32.1 and its supported protocol version, so clients requiring only a newer protocol revision may need an SDK upgrade.
+The remote implementation has been tested with the official TypeScript SDK client over Streamable HTTP after the test manually obtained an OAuth token. The SDK's automatic OAuth discovery and authorization flow, and compatibility with Claude.ai, ChatGPT or another hosted client, still need an actual connection test. The server uses SDK 1.32.1 and its supported protocol version, so clients requiring only a newer protocol revision may need an SDK upgrade.
 
 ## Setup
 
@@ -74,7 +74,7 @@ Troubleshooting: if startup says authorization failed, check that the main Docke
 
 ## Verification and compatibility
 
-See the [requirement check](mcp-requirements.md) for implemented, tested, and intentionally unsupported items.
+See the [requirement check](mcp-requirements.md) and [phase audit](mcp-phase-audit.md) for implemented, tested, and intentionally unsupported items.
 
 `npm run check` validates formatting, lint, types and build. `npm run test:mcp` exercises the stdio transport. `npm run test:mcp-remote` exercises discovery, dynamic registration, PKCE, consent, token exchange, SDK Streamable HTTP tool calls, refresh rotation, blocked writes, and disconnection. Both create disposable local accounts and delete them afterward. They refuse a non-loopback `TEST_BASE_URL`.
 
