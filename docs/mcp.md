@@ -18,7 +18,7 @@ In a remote MCP client that supports OAuth, add `https://habit-tracker-xard.onre
 
 Local development uses `http://127.0.0.1:8080/mcp`; public deployments require HTTPS. Access tokens expire after one hour, refresh tokens rotate on use, and a grant expires after 30 days of inactivity. A disconnected grant immediately loses tool access. The consent page asks for the account password because this OAuth flow does not reuse the SPA's JavaScript access token. A connected client may send account data to its own model provider; review the client before approving.
 
-The remote implementation has been tested locally with the official TypeScript SDK v2 client driving automatic OAuth discovery, dynamic registration, PKCE, token exchange, and a tool call. Claude.ai, ChatGPT, and other hosted products need their own compatibility checks. The server uses SDK 1.32.1 and negotiates successfully with the tested v2 client; clients requiring only a newer protocol revision may need a server SDK upgrade.
+The remote implementation has been tested against the live Render URL with the official TypeScript SDK v2 client driving automatic OAuth discovery, dynamic registration, PKCE, token exchange, and a tool call. Claude.ai, ChatGPT, and other hosted products need their own compatibility checks. The server uses SDK 1.32.1 and negotiates successfully with the tested v2 client; clients requiring only a newer protocol revision may need a server SDK upgrade. Render's Free plan sleeps after inactivity, so this deployment does not offer always-on production availability.
 
 ## Setup
 
@@ -78,11 +78,11 @@ See the [requirement check](mcp-requirements.md) and [phase audit](mcp-phase-aud
 
 `npm run check` validates formatting, lint, types and build. `npm run test:mcp` exercises the stdio transport. `npm run test:mcp-remote` exercises discovery, dynamic registration, RFC-compliant PKCE verifiers, consent, automatic SDK v2 OAuth, Streamable HTTP tool calls, account isolation, refresh rotation, blocked writes, and disconnection. Both create disposable accounts and delete them afterward. The remote test refuses non-loopback targets unless `TEST_HOSTED_MCP=1` and `TEST_BASE_URL` is exactly `https://habit-tracker-xard.onrender.com`; hosted mode performs only the minimal OAuth flow to avoid production rate limits.
 
-| Client                                | Transport                 | Status                                                              | Authentication                         |
-| ------------------------------------- | ------------------------- | ------------------------------------------------------------------- | -------------------------------------- |
-| Official TypeScript MCP SDK client    | stdio via Docker launcher | Verified by `test:mcp` when it passes locally                       | Read-only token in process environment |
-| Official TypeScript MCP SDK v2 client | Streamable HTTP           | Automatic OAuth and tool call verified by `test:mcp-remote` locally | OAuth authorization code with PKCE     |
-| Claude Desktop                        | stdio                     | Configuration documented; manual UI compatibility not yet verified  | Read-only token in process environment |
-| Hosted AI clients                     | Streamable HTTP           | Manual UI compatibility not yet verified                            | OAuth, where supported                 |
+| Client                                | Transport                 | Status                                                             | Authentication                         |
+| ------------------------------------- | ------------------------- | ------------------------------------------------------------------ | -------------------------------------- |
+| Official TypeScript MCP SDK client    | stdio via Docker launcher | Verified by `test:mcp` when it passes locally                      | Read-only token in process environment |
+| Official TypeScript MCP SDK v2 client | Streamable HTTP           | Automatic OAuth and tool call verified locally and on Render       | OAuth authorization code with PKCE     |
+| Claude Desktop                        | stdio                     | Configuration documented; manual UI compatibility not yet verified | Read-only token in process environment |
+| Hosted AI clients                     | Streamable HTTP           | Manual UI compatibility not yet verified                           | OAuth, where supported                 |
 
 The connector pins `@modelcontextprotocol/sdk` 1.32.1. Its remote authorization design follows the [MCP authorization specification](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization). Protocol-version compatibility beyond the tested SDK client is not claimed.
