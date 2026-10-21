@@ -1535,7 +1535,6 @@ export function ProfilePanel({
   onSaved: (user: ProfileUser) => void;
 }) {
   const [name, setName] = useState(user.name);
-  const [timezone, setTimezone] = useState(user.timezone);
   const [age, setAge] = useState(user.age?.toString() ?? '');
   const [heightCm, setHeightCm] = useState(user.heightCm?.toString() ?? '');
   const [weightKg, setWeightKg] = useState(user.weightKg?.toString() ?? '');
@@ -1552,7 +1551,6 @@ export function ProfilePanel({
     try {
       const result = await api<{ user: typeof user }>('/api/v1/user', 'PUT', {
         name: name.trim(),
-        timezone,
         age: numberOrNull(age),
         heightCm: numberOrNull(heightCm),
         weightKg: numberOrNull(weightKg),
@@ -1605,13 +1603,6 @@ export function ProfilePanel({
         <small id="profile-email-note">
           Email changes are not available here.
         </small>
-        <label>
-          Timezone
-          <input
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-          />
-        </label>
         <div className="profile-grid">
           <label>
             Age (years)
