@@ -7,6 +7,7 @@ import {
   GoalPlanner,
   InsightsPanel,
   ReportsPanel,
+  ProfilePanel,
   SettingsPanel,
   TaskTracker,
 } from './features.tsx';
@@ -28,6 +29,9 @@ type User = {
   name: string;
   timezone: string;
   version: number;
+  age: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
 };
 type Today = {
   date: string;
@@ -61,6 +65,7 @@ type View =
   | 'reports'
   | 'journal'
   | 'mentor'
+  | 'profile'
   | 'settings';
 class ApiError extends Error {
   constructor(
@@ -500,6 +505,7 @@ function App() {
     { view: 'insights', label: 'Insights' },
     { view: 'journal', label: 'Journal' },
     { view: 'mentor', label: 'AI Mentor' },
+    { view: 'profile', label: 'Profile' },
     { view: 'settings', label: 'Settings' },
   ];
   return (
@@ -775,6 +781,16 @@ function App() {
             )
           ) : view === 'mentor' ? (
             <MentorPanel api={request} onOpenArea={openMentorArea} />
+          ) : view === 'profile' ? (
+            <ProfilePanel
+              api={request}
+              user={user}
+              onSaved={(updated) =>
+                setUser((current) =>
+                  current ? { ...current, ...updated } : current,
+                )
+              }
+            />
           ) : (
             <SettingsPanel api={request} onDeleted={accountDeleted} />
           )}

@@ -29,11 +29,19 @@ const profileSchema = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
     timezone: timezoneSchema.optional(),
+    age: z.number().int().min(13).max(120).nullable().optional(),
+    heightCm: z.number().min(50).max(250).nullable().optional(),
+    weightKg: z.number().min(20).max(500).nullable().optional(),
     version: z.number().int().positive(),
   })
   .strict()
   .refine(
-    (v) => v.name !== undefined || v.timezone !== undefined,
+    (v) =>
+      v.name !== undefined ||
+      v.timezone !== undefined ||
+      v.age !== undefined ||
+      v.heightCm !== undefined ||
+      v.weightKg !== undefined,
     'Nothing to update',
   );
 const deleteAccountSchema = z.object({ password: z.string().min(1) }).strict();
@@ -69,6 +77,9 @@ interface UserRow {
   timezone: string;
   role: 'user' | 'admin';
   version: number;
+  age: number | null;
+  height_cm: number | null;
+  weight_kg: number | null;
   password_hash: string;
 }
 interface SessionRow {
@@ -91,6 +102,9 @@ function publicUser(user: UserRow) {
     timezone: user.timezone,
     role: user.role,
     version: user.version,
+    age: user.age,
+    heightCm: user.height_cm === null ? null : Number(user.height_cm),
+    weightKg: user.weight_kg === null ? null : Number(user.weight_kg),
   };
 }
 function hash(value: string) {
@@ -554,7 +568,7 @@ export async function registerAuth(
       const found = await requirePrincipal(request, reply);
       if (!found) return;
       const user = await pool.query<UserRow>(
-        `SELECT id,email,name,timezone,role,version FROM users WHERE id=$1`,
+        `SELECT id,email,name,timezone,role,version,age,height_cm,weight_kg FROM users WHERE id=$1`,
         [found.userId],
       );
       const row = user.rows[0];
@@ -574,12 +588,18 @@ export async function registerAuth(
       const input = parse(profileSchema, request.body, reply, request);
       if (!input) return;
       const updated = await pool.query<UserRow>(
-        `UPDATE users SET name=coalesce($1,name),timezone=coalesce($2,timezone),version=version+1,updated_at=now() WHERE id=$3 AND version=$4 RETURNING id,email,name,timezone,role,version`,
+        `UPDATE users SET name=coalesce($1,name),timezone=coalesce($2,timezone),age=CASE WHEN $5::boolean THEN $6 ELSE age END,height_cm=CASE WHEN $7::boolean THEN $8 ELSE height_cm END,weight_kg=CASE WHEN $9::boolean THEN $10 ELSE weight_kg END,version=version+1,updated_at=now() WHERE id=$3 AND version=$4 RETURNING id,email,name,timezone,role,version,age,height_cm,weight_kg`,
         [
           input.name ?? null,
           input.timezone ?? null,
           found.userId,
           input.version,
+          input.age !== undefined,
+          input.age ?? null,
+          input.heightCm !== undefined,
+          input.heightCm ?? null,
+          input.weightKg !== undefined,
+          input.weightKg ?? null,
         ],
       );
       const row = updated.rows[0];
@@ -604,7 +624,7 @@ export async function registerAuth(
           'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
         );
         const tables = {
-          profile: `SELECT id,email,name,timezone,created_at,updated_at FROM users WHERE id=$1`,
+          profile: `SELECT id,email,name,timezone,age,height_cm,weight_kg,created_at,updated_at FROM users WHERE id=$1`,
           settings: `SELECT week_start,locale,theme,dnd_start,dnd_end,notify_push,notify_email,notify_sms,analytics_consent,ai_journal_consent,ai_journal_consent_at FROM settings WHERE user_id=$1`,
           habits: `SELECT id,name,description,category,icon,color,active,start_date,end_date,archived_on,sort_order,created_at,updated_at FROM habits WHERE user_id=$1 ORDER BY id`,
           schedules: `SELECT id,habit_id,effective_from,frequency,weekdays,month_days,target,unit,reminder_time FROM habit_schedules WHERE user_id=$1 ORDER BY habit_id,effective_from`,

@@ -632,6 +632,24 @@ input::placeholder {
   border-radius: 14px;
   background: var(--surface);
 }
+
+.profile-form {
+  max-width: 720px;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.profile-form small {
+  color: var(--muted);
+  margin-top: -8px;
+}
+@media (max-width: 640px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .mindset-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1178,8 +1196,11 @@ footer {
 @media (min-width: 801px) {
   .shell {
     max-width: 1240px;
-    padding-left: 254px;
+    padding-left: 32px;
     padding-right: 32px;
+  }
+  body:has(.app-nav) .shell {
+    padding-left: 254px;
   }
   .app-nav {
     position: fixed;

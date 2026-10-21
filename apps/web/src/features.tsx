@@ -18,6 +18,15 @@ export type ApiRequest = <T>(
   method?: string,
   body?: unknown,
 ) => Promise<T>;
+type ProfileUser = {
+  name: string;
+  email: string;
+  timezone: string;
+  version: number;
+  age: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
+};
 type Task = {
   id: number;
   title: string;
@@ -1511,6 +1520,139 @@ export function SettingsPanel({
         <button className="destructive" disabled={busy}>
           Permanently delete account
         </button>
+      </form>
+    </section>
+  );
+}
+
+export function ProfilePanel({
+  api,
+  user,
+  onSaved,
+}: {
+  api: ApiRequest;
+  user: ProfileUser;
+  onSaved: (user: ProfileUser) => void;
+}) {
+  const [name, setName] = useState(user.name);
+  const [timezone, setTimezone] = useState(user.timezone);
+  const [age, setAge] = useState(user.age?.toString() ?? '');
+  const [heightCm, setHeightCm] = useState(user.heightCm?.toString() ?? '');
+  const [weightKg, setWeightKg] = useState(user.weightKg?.toString() ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    setNotice('');
+    const numberOrNull = (value: string) =>
+      value.trim() === '' ? null : Number(value);
+    try {
+      const result = await api<{ user: typeof user }>('/api/v1/user', 'PUT', {
+        name: name.trim(),
+        timezone,
+        age: numberOrNull(age),
+        heightCm: numberOrNull(heightCm),
+        weightKg: numberOrNull(weightKg),
+        version: user.version,
+      });
+      onSaved(result.user);
+      setNotice('Profile saved.');
+    } catch (cause) {
+      setError(message(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section aria-labelledby="profile-title">
+      <p className="eyebrow">YOUR DETAILS</p>
+      <h2 id="profile-title">Profile</h2>
+      <p>
+        Keep your personal details up to date. These details stay private to
+        your account.
+      </p>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
+        </p>
+      )}
+      <form className="settings-card profile-form" onSubmit={save}>
+        <label>
+          Display name
+          <input
+            required
+            maxLength={100}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <label>
+          Email
+          <input
+            value={user.email}
+            readOnly
+            aria-describedby="profile-email-note"
+          />
+        </label>
+        <small id="profile-email-note">
+          Email changes are not available here.
+        </small>
+        <label>
+          Timezone
+          <input
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+          />
+        </label>
+        <div className="profile-grid">
+          <label>
+            Age (years)
+            <input
+              type="number"
+              min="13"
+              max="120"
+              inputMode="numeric"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+          <label>
+            Height (cm)
+            <input
+              type="number"
+              min="50"
+              max="250"
+              step="0.1"
+              inputMode="decimal"
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+          <label>
+            Weight (kg)
+            <input
+              type="number"
+              min="20"
+              max="500"
+              step="0.1"
+              inputMode="decimal"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+        </div>
+        <button disabled={busy}>{busy ? 'Saving…' : 'Save profile'}</button>
       </form>
     </section>
   );
