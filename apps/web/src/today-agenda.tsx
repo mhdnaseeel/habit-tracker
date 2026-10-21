@@ -110,22 +110,6 @@ const typeLabels: Record<ActivityType, string> = {
   appointment: 'Appointment',
   personal: 'Personal routine',
 };
-const suggestedTimeline = [
-  ['Wake up', '07:00', '07:10'],
-  ['Sunlight', '07:10', '07:25'],
-  ['Stretching', '07:25', '07:40'],
-  ['Running', '07:40', '08:10'],
-  ['Post-run stretching', '08:10', '08:20'],
-  ['Meditation', '08:20', '08:30'],
-  ['Breakfast · 3 eggs', '09:00', '09:30'],
-  ['Study · DSA and Java', '10:00', '11:30'],
-  ['Oats snack', '11:30', '11:45'],
-  ['Lunch', '13:00', '13:30'],
-  ['Yogurt or healthy snack', '15:00', '15:15'],
-  ['Egg snack · 3 eggs', '16:00', '16:15'],
-  ['Dinner', '19:00', '19:30'],
-  ['Wind down and sleep', '23:15', '23:45'],
-] as const;
 function localClock(timezone: string) {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone,
@@ -491,36 +475,6 @@ export function TodayAgenda({
       setBusyKey(null);
     }
   }
-  async function addSuggestedTimeline() {
-    if (offline) return;
-    if (
-      !window.confirm(
-        `Add ${suggestedTimeline.length} time blocks to ${dateLabel(date)}?`,
-      )
-    )
-      return;
-    setBusyKey('suggested-timeline');
-    setError('');
-    try {
-      for (const [title, startTime, endTime] of suggestedTimeline)
-        await api('/api/v1/activities', 'POST', {
-          title,
-          activityType: 'personal',
-          scheduledDate: date,
-          startTime,
-          endTime,
-          priority: 3,
-        });
-      await reload(date);
-      setNotice('Your daily timeline was added.');
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : 'Could not add timeline',
-      );
-    } finally {
-      setBusyKey(null);
-    }
-  }
   async function openForm(activity?: Activity) {
     setError('');
     setNotice('');
@@ -836,14 +790,6 @@ export function TodayAgenda({
             disabled={offline}
           >
             Add activity
-          </button>
-          <button
-            className="quiet"
-            type="button"
-            onClick={() => void addSuggestedTimeline()}
-            disabled={offline || busyKey !== null}
-          >
-            Add daily timeline
           </button>
         </div>
       </div>
