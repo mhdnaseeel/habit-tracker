@@ -161,16 +161,17 @@ function readItemStatus(
 }
 function overlapKeys(items: AgendaItem[]) {
   const keys = new Set<string>();
-  const timed = items.filter((item) => item.startTime && item.endTime);
-  for (let left = 0; left < timed.length; left++)
-    for (let right = left + 1; right < timed.length; right++)
-      if (
-        timed[left]!.startTime! < timed[right]!.endTime! &&
-        timed[right]!.startTime! < timed[left]!.endTime!
-      ) {
-        keys.add(timed[left]!.key);
-        keys.add(timed[right]!.key);
-      }
+  const timed = items
+    .filter((item) => item.startTime && item.endTime)
+    .toSorted((a, b) => a.startTime!.localeCompare(b.startTime!));
+  let furthest: AgendaItem | undefined;
+  for (const item of timed) {
+    if (furthest && item.startTime! < furthest.endTime!) {
+      keys.add(furthest.key);
+      keys.add(item.key);
+    }
+    if (!furthest || item.endTime! > furthest.endTime!) furthest = item;
+  }
   return keys;
 }
 function merge(data: DayData): AgendaItem[] {
@@ -471,7 +472,9 @@ export function TodayAgenda({
       } else if (item.activity) {
         await api(`/api/v1/activities/${item.activity.id}/${action}`, 'POST');
       }
-      await Promise.all([reload(date), onChanged()]);
+      // The row is already updated optimistically. Only a habit freeze changes
+      // the parent's freeze-availability summary; other actions need no GET.
+      if (action === 'skip' && item.habitId) await onChanged();
       setNotice(
         action === 'complete'
           ? 'Updated.'

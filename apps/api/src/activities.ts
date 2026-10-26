@@ -330,90 +330,45 @@ async function ensureOccurrence(
   userId: string,
   date: string,
 ) {
-  const series = await client.query<{
-    id: number;
-    title: string;
-    description: string | null;
-    activity_type: ActivityInput['activityType'];
-    start_time: string | null;
-    end_time: string | null;
-    timezone: string;
-    priority: number;
-    reminder_time: string | null;
-    notes: string | null;
-    linked_habit_id: number | null;
-    linked_goal_id: number | null;
-    series_id: number;
-    recurrence: 'daily';
-    series_ends_on: string | null;
-  }>(
-    `SELECT id,title,description,activity_type,start_time,end_time,timezone,priority,reminder_time,notes,linked_habit_id,linked_goal_id,series_id,recurrence,series_ends_on
-       FROM daily_activities
-      WHERE user_id=$1 AND recurrence='daily' AND is_series_template=true AND scheduled_date<=$2 AND (series_ends_on IS NULL OR series_ends_on >= $2) AND cancelled_at IS NULL
-      ORDER BY id`,
+  await client.query(
+    `INSERT INTO daily_activities(
+       user_id,title,description,activity_type,scheduled_date,start_time,end_time,
+       timezone,priority,reminder_time,notes,linked_habit_id,linked_goal_id,
+       series_id,recurrence,is_series_template
+     )
+     SELECT series.user_id,series.title,series.description,series.activity_type,$2,
+       series.start_time,series.end_time,series.timezone,series.priority,
+       series.reminder_time,series.notes,series.linked_habit_id,series.linked_goal_id,
+       series.series_id,'daily',false
+       FROM daily_activities AS series
+      WHERE series.user_id=$1 AND series.recurrence='daily'
+        AND series.is_series_template=true AND series.scheduled_date<=$2
+        AND (series.series_ends_on IS NULL OR series.series_ends_on >= $2)
+        AND series.cancelled_at IS NULL
+        AND (
+          series.linked_habit_id IS NULL OR EXISTS (
+            SELECT 1
+              FROM habits AS habit
+              JOIN LATERAL (
+                SELECT frequency,weekdays,month_days
+                  FROM habit_schedules
+                 WHERE habit_id=habit.id AND user_id=habit.user_id
+                   AND effective_from<=$2
+                 ORDER BY effective_from DESC LIMIT 1
+              ) AS schedule ON true
+             WHERE habit.id=series.linked_habit_id AND habit.user_id=$1
+               AND habit.start_date<=$2
+               AND (habit.end_date IS NULL OR habit.end_date >= $2)
+               AND (habit.archived_on IS NULL OR habit.archived_on > $2)
+               AND (schedule.frequency<>'weekly' OR
+                    EXTRACT(DOW FROM $2::date)::integer=ANY(schedule.weekdays))
+               AND (schedule.frequency<>'monthly' OR
+                    EXTRACT(DAY FROM $2::date)::integer=ANY(schedule.month_days))
+          )
+        )
+     ON CONFLICT(series_id,scheduled_date) DO NOTHING`,
     [userId, date],
   );
-  for (const item of series.rows) {
-    if (item.linked_habit_id) {
-      const habit = (
-        await client.query<{
-          start_date: string;
-          end_date: string | null;
-          archived_on: string | null;
-        }>(
-          'SELECT start_date,end_date,archived_on FROM habits WHERE id=$1 AND user_id=$2',
-          [item.linked_habit_id, userId],
-        )
-      ).rows[0];
-      if (
-        !habit ||
-        habit.start_date > date ||
-        (habit.end_date && habit.end_date < date) ||
-        (habit.archived_on && habit.archived_on <= date)
-      )
-        continue;
-      const rule = (
-        await client.query<{
-          frequency: string;
-          weekdays: number[];
-          month_days: number[];
-        }>(
-          'SELECT frequency,weekdays,month_days FROM habit_schedules WHERE habit_id=$1 AND user_id=$2 AND effective_from<=$3 ORDER BY effective_from DESC LIMIT 1',
-          [item.linked_habit_id, userId, date],
-        )
-      ).rows[0];
-      const calendarDate = new Date(`${date}T12:00:00Z`);
-      if (
-        !rule ||
-        (rule.frequency === 'weekly' &&
-          !rule.weekdays.includes(calendarDate.getUTCDay())) ||
-        (rule.frequency === 'monthly' &&
-          !rule.month_days.includes(calendarDate.getUTCDate()))
-      )
-        continue;
-    }
-    await client.query(
-      `INSERT INTO daily_activities(user_id,title,description,activity_type,scheduled_date,start_time,end_time,timezone,priority,reminder_time,notes,linked_habit_id,linked_goal_id,series_id,recurrence,is_series_template)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'daily',false)
-       ON CONFLICT(series_id,scheduled_date) DO NOTHING`,
-      [
-        userId,
-        item.title,
-        item.description,
-        item.activity_type,
-        date,
-        item.start_time,
-        item.end_time,
-        item.timezone,
-        item.priority,
-        item.reminder_time,
-        item.notes,
-        item.linked_habit_id,
-        item.linked_goal_id,
-        item.series_id,
-      ],
-    );
-  }
 }
 export async function registerActivities(
   app: FastifyInstance,

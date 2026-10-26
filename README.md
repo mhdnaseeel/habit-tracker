@@ -37,7 +37,7 @@ The hosted OAuth flow and all ten read-only tools were verified with the officia
 
 ## Deployment
 
-The repository includes deployment configurations for [AWS EC2](docs/deploy-aws.md), [Cloudflare Containers](docs/deploy-cloudflare.md), and the previous [Render preview](docs/deploy-free.md). AWS and Cloudflare reuse the existing Docker application, serve the frontend and API from one HTTPS origin, and apply PostgreSQL migrations at startup. Provider compute, network, storage, Neon plan limits, and separate OpenAI API credits may apply.
+The repository includes deployment configurations for [Google Cloud Run](docs/deploy-cloudrun.md), [AWS EC2](docs/deploy-aws.md), [Cloudflare Containers](docs/deploy-cloudflare.md), and the previous [Render preview](docs/deploy-free.md). Cloud Run and the other hosted targets reuse the existing Dockerfile; Cloud Run builds the `hosted` target in Google Cloud and serves the frontend, API, OAuth and MCP endpoint from one HTTPS service. Provider compute, build, network, storage, Neon plan limits, and separate OpenAI API credits may apply.
 
 ## Analysis reports
 

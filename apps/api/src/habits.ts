@@ -415,20 +415,30 @@ export async function registerHabits(
           )
         ).rows.map((row) => row.habit_id),
       );
+      const rulesByHabit = new Map<number, ScheduleRow[]>();
+      for (const rule of ruleRows) {
+        const rules = rulesByHabit.get(rule.habit_id) ?? [];
+        rules.push(rule);
+        rulesByHabit.set(rule.habit_id, rules);
+      }
+      const logsByHabit = new Map<number, HabitLog[]>();
+      const todayLogByHabit = new Map<number, InstanceRow>();
+      for (const row of logRows) {
+        const logs = logsByHabit.get(row.habit_id) ?? [];
+        logs.push({
+          date: localDate(row.date),
+          status: row.status,
+          value: row.value,
+        });
+        logsByHabit.set(row.habit_id, logs);
+        if (row.date === today) todayLogByHabit.set(row.habit_id, row);
+      }
       const habits = habitRows.flatMap((h) => {
-        const rules = ruleRows.filter((r) => r.habit_id === h.id);
+        const rules = rulesByHabit.get(h.id) ?? [];
         const series = timeline(h, rules);
         if (!isScheduled(series, today)) return [];
-        const logs = logRows
-          .filter((r) => r.habit_id === h.id)
-          .map((r) => ({
-            date: localDate(r.date),
-            status: r.status,
-            value: r.value,
-          }));
-        const status = logRows.find(
-          (r) => r.habit_id === h.id && r.date === today,
-        );
+        const logs = logsByHabit.get(h.id) ?? [];
+        const status = todayLogByHabit.get(h.id);
         const target = scheduleOn(rules, today)?.target ?? 1;
         const streak = calculateStreak(
           series,

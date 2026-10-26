@@ -288,10 +288,10 @@ function App() {
         );
     };
     window.addEventListener('focus', sync);
-    const interval = window.setInterval(sync, 60000);
+    document.addEventListener('visibilitychange', sync);
     return () => {
       window.removeEventListener('focus', sync);
-      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', sync);
     };
   }, [user?.id, view, weekOffset, historyMode]);
   async function submitAuth(event: FormEvent) {
