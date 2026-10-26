@@ -92,6 +92,30 @@ test('Today activities reuse task and habit records without duplicate progress',
         201,
       )
     ).activity;
+    const recurring = (
+      await good(
+        first.token,
+        '/api/v1/activities',
+        'POST',
+        {
+          ...activityBody('Daily recurring appointment', null, null),
+          recurrence: 'daily',
+        },
+        201,
+      )
+    ).activity;
+    assert.equal(recurring.recurrence, 'daily');
+    assert.equal(recurring.isSeriesTemplate, true);
+    const nextOccurrence = (
+      await good(first.token, `/api/v1/activities?date=${nextDate}`)
+    ).activities.find((item) => item.seriesId === recurring.seriesId);
+    assert.ok(nextOccurrence);
+    assert.notEqual(nextOccurrence.id, recurring.id);
+    const repeatedOccurrence = (
+      await good(first.token, `/api/v1/activities?date=${nextDate}`)
+    ).activities.find((item) => item.seriesId === recurring.seriesId);
+    assert.equal(repeatedOccurrence.id, nextOccurrence.id);
+    assert.equal(nextOccurrence.status, 'planned');
     const list = await good(first.token, `/api/v1/activities?date=${date}`);
     assert.deepEqual(
       list.activities.map((item) => item.id),
@@ -181,6 +205,18 @@ test('Today activities reuse task and habit records without duplicate progress',
       'completed',
     );
     await good(first.token, `/api/v1/activities/${overlap.id}/undo`, 'POST');
+
+    const recurrenceOnTask = await call(
+      first.token,
+      '/api/v1/activities',
+      'POST',
+      {
+        ...activityBody('Recurring task should be invalid', null, null),
+        activityType: 'task',
+        recurrence: 'daily',
+      },
+    );
+    assert.equal(recurrenceOnTask.status, 400);
     await good(first.token, `/api/v1/activities/${overlap.id}/skip`, 'POST');
     assert.equal(
       (

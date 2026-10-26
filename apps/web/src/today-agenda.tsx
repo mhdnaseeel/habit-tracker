@@ -19,6 +19,11 @@ type Activity = {
   description: string | null;
   activityType: ActivityType;
   scheduledDate: string;
+  recurrence: 'none' | 'daily';
+  recurrenceStartDate: string;
+  isSeriesTemplate: boolean;
+  seriesId: number;
+  seriesEndsOn: string | null;
   startTime: string | null;
   endTime: string | null;
   priority: number;
@@ -78,6 +83,11 @@ type FormState = {
   description: string;
   activityType: ActivityType;
   scheduledDate: string;
+  recurrence: 'none' | 'daily';
+  recurrenceStartDate?: string;
+  isSeriesTemplate?: boolean;
+  seriesId?: number;
+  seriesEndsOn?: string | null;
   startTime: string;
   endTime: string;
   priority: number;
@@ -94,6 +104,9 @@ const emptyForm = (date: string): FormState => ({
   description: '',
   activityType: 'task',
   scheduledDate: date,
+  recurrence: 'none',
+  recurrenceStartDate: date,
+  isSeriesTemplate: false,
   startTime: '',
   endTime: '',
   priority: 3,
@@ -486,6 +499,11 @@ export function TodayAgenda({
         description: activity.description ?? '',
         activityType: activity.activityType,
         scheduledDate: activity.scheduledDate,
+        recurrence: activity.recurrence,
+        recurrenceStartDate: activity.recurrenceStartDate,
+        isSeriesTemplate: activity.isSeriesTemplate,
+        seriesId: activity.seriesId,
+        seriesEndsOn: activity.seriesEndsOn,
         startTime: activity.startTime ?? '',
         endTime: activity.endTime ?? '',
         priority: activity.priority,
@@ -521,6 +539,7 @@ export function TodayAgenda({
         description: form.description || null,
         activityType: form.activityType,
         scheduledDate: form.scheduledDate,
+        recurrence: form.recurrence,
         startTime: form.startTime || null,
         endTime: form.endTime || null,
         priority: form.priority,
@@ -541,7 +560,10 @@ export function TodayAgenda({
         );
         if (!original) throw new Error('Activity changed; reload this day');
         let version = form.version!;
-        if (original.scheduledDate !== form.scheduledDate) {
+        if (
+          original.recurrence === 'none' &&
+          original.scheduledDate !== form.scheduledDate
+        ) {
           const result = await api<{ activity: Activity }>(
             `/api/v1/activities/${form.id}/reschedule`,
             'POST',
@@ -1064,12 +1086,36 @@ export function TodayAgenda({
                   required
                   type="date"
                   value={form.scheduledDate}
-                  disabled={form.activityType === 'habit' && form.id !== null}
+                  disabled={
+                    form.id !== null &&
+                    (form.activityType === 'habit' ||
+                      (form.recurrence === 'daily' && !form.isSeriesTemplate))
+                  }
                   onChange={(event) =>
-                    setForm({ ...form, scheduledDate: event.target.value })
+                    setForm({
+                      ...form,
+                      scheduledDate: event.target.value,
+                      recurrenceStartDate: event.target.value,
+                    })
                   }
                 />
               </label>
+              {form.activityType !== 'task' && (
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={form.recurrence === 'daily'}
+                    disabled={form.id !== null && !form.isSeriesTemplate}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        recurrence: event.target.checked ? 'daily' : 'none',
+                      })
+                    }
+                  />
+                  Habit for all days
+                </label>
+              )}
               <label>
                 Priority
                 <select
@@ -1147,6 +1193,12 @@ export function TodayAgenda({
                 }
               />
             </label>
+            {form.id && form.recurrence === 'daily' && (
+              <p className="agenda-hint">
+                Changes apply to this date and future dates. Completed past
+                dates are kept.
+              </p>
+            )}
             <div className="agenda-form-actions">
               <button type="submit" disabled={busyKey !== null || offline}>
                 {busyKey === 'form' ? 'Saving…' : 'Save activity'}

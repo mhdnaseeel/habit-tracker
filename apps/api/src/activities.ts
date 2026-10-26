@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type pg from 'pg';
 import { z } from 'zod';
 import { dateSchema } from '../../../packages/contracts/src/index.ts';
-import { dateInTimezone } from '../../../packages/domain/src/index.ts';
+import {
+  addDays,
+  dateInTimezone,
+  localDate,
+} from '../../../packages/domain/src/index.ts';
 import type { Principal } from './auth.ts';
 import { transaction } from './database.ts';
 
@@ -20,6 +24,7 @@ const fields = z
     description: z.string().max(5000).nullable().optional(),
     activityType: kind,
     scheduledDate: dateSchema,
+    recurrence: z.enum(['none', 'daily']).default('none'),
     startTime: time.nullable().optional(),
     endTime: time.nullable().optional(),
     priority: z.number().int().min(1).max(5).default(3),
@@ -82,6 +87,11 @@ type ActivityRow = {
   habit_status: string | null;
   habit_value: number | null;
   habit_target: number | null;
+  series_id: number;
+  recurrence: 'none' | 'daily';
+  recurrenceStartDate: string;
+  is_series_template: boolean;
+  series_ends_on: string | null;
 };
 
 function validateTimes(
@@ -106,6 +116,12 @@ function validateTimes(
 }
 function validateFields(input: ActivityInput, ctx: z.RefinementCtx) {
   validateTimes(input, ctx);
+  if (input.recurrence === 'daily' && input.activityType === 'task')
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Tasks use task recurrence settings',
+      path: ['recurrence'],
+    });
   if (input.activityType === 'habit' && !input.linkedHabitId)
     ctx.addIssue({
       code: 'custom',
@@ -194,6 +210,11 @@ function present(row: ActivityRow) {
     habitValue: row.habit_value ?? 0,
     habitTarget: row.habit_target ?? 1,
     version: row.version,
+    seriesId: row.series_id,
+    recurrence: row.recurrence,
+    recurrenceStartDate: row.scheduled_date,
+    isSeriesTemplate: row.is_series_template,
+    seriesEndsOn: row.series_ends_on,
   };
 }
 const selectActivity = `SELECT a.*,t.title AS task_title,t.description AS task_description,t.priority AS task_priority,h.name AS habit_name,g.title AS goal_title,
@@ -304,6 +325,96 @@ async function checkLinks(
   }
   return null;
 }
+async function ensureOccurrence(
+  client: pg.PoolClient,
+  userId: string,
+  date: string,
+) {
+  const series = await client.query<{
+    id: number;
+    title: string;
+    description: string | null;
+    activity_type: ActivityInput['activityType'];
+    start_time: string | null;
+    end_time: string | null;
+    timezone: string;
+    priority: number;
+    reminder_time: string | null;
+    notes: string | null;
+    linked_habit_id: number | null;
+    linked_goal_id: number | null;
+    series_id: number;
+    recurrence: 'daily';
+    series_ends_on: string | null;
+  }>(
+    `SELECT id,title,description,activity_type,start_time,end_time,timezone,priority,reminder_time,notes,linked_habit_id,linked_goal_id,series_id,recurrence,series_ends_on
+       FROM daily_activities
+      WHERE user_id=$1 AND recurrence='daily' AND is_series_template=true AND scheduled_date<=$2 AND (series_ends_on IS NULL OR series_ends_on >= $2) AND cancelled_at IS NULL
+      ORDER BY id`,
+    [userId, date],
+  );
+  for (const item of series.rows) {
+    if (item.linked_habit_id) {
+      const habit = (
+        await client.query<{
+          start_date: string;
+          end_date: string | null;
+          archived_on: string | null;
+        }>(
+          'SELECT start_date,end_date,archived_on FROM habits WHERE id=$1 AND user_id=$2',
+          [item.linked_habit_id, userId],
+        )
+      ).rows[0];
+      if (
+        !habit ||
+        habit.start_date > date ||
+        (habit.end_date && habit.end_date < date) ||
+        (habit.archived_on && habit.archived_on <= date)
+      )
+        continue;
+      const rule = (
+        await client.query<{
+          frequency: string;
+          weekdays: number[];
+          month_days: number[];
+        }>(
+          'SELECT frequency,weekdays,month_days FROM habit_schedules WHERE habit_id=$1 AND user_id=$2 AND effective_from<=$3 ORDER BY effective_from DESC LIMIT 1',
+          [item.linked_habit_id, userId, date],
+        )
+      ).rows[0];
+      const calendarDate = new Date(`${date}T12:00:00Z`);
+      if (
+        !rule ||
+        (rule.frequency === 'weekly' &&
+          !rule.weekdays.includes(calendarDate.getUTCDay())) ||
+        (rule.frequency === 'monthly' &&
+          !rule.month_days.includes(calendarDate.getUTCDate()))
+      )
+        continue;
+    }
+    await client.query(
+      `INSERT INTO daily_activities(user_id,title,description,activity_type,scheduled_date,start_time,end_time,timezone,priority,reminder_time,notes,linked_habit_id,linked_goal_id,series_id,recurrence,is_series_template)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'daily',false)
+       ON CONFLICT(series_id,scheduled_date) DO NOTHING`,
+      [
+        userId,
+        item.title,
+        item.description,
+        item.activity_type,
+        date,
+        item.start_time,
+        item.end_time,
+        item.timezone,
+        item.priority,
+        item.reminder_time,
+        item.notes,
+        item.linked_habit_id,
+        item.linked_goal_id,
+        item.series_id,
+      ],
+    );
+  }
+}
 export async function registerActivities(
   app: FastifyInstance,
   pool: pg.Pool,
@@ -322,10 +433,13 @@ export async function registerActivities(
       if (!user) return;
       const input = parse(dateQuery, request.query, reply, request);
       if (!input) return;
-      const rows = await pool.query<ActivityRow>(
-        `${selectActivity} WHERE a.user_id=$1 AND a.scheduled_date=$2 AND a.cancelled_at IS NULL ORDER BY a.start_time NULLS LAST,a.end_time,a.id`,
-        [user.userId, input.date],
-      );
+      const rows = await transaction(pool, async (client) => {
+        await ensureOccurrence(client, user.userId, input.date);
+        return client.query<ActivityRow>(
+          `${selectActivity} WHERE a.user_id=$1 AND a.scheduled_date=$2 AND a.cancelled_at IS NULL AND (a.is_series_template=false OR a.is_series_template=true AND a.scheduled_date=$2) ORDER BY a.start_time NULLS LAST,a.end_time,a.id`,
+          [user.userId, input.date],
+        );
+      });
       return { activities: rows.rows.map(present) };
     },
   );
@@ -391,8 +505,8 @@ export async function registerActivities(
           }
           const row = (
             await client.query<{ id: number }>(
-              `INSERT INTO daily_activities(user_id,title,description,activity_type,scheduled_date,start_time,end_time,timezone,priority,reminder_time,notes,linked_task_id,linked_habit_id,linked_goal_id)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+              `INSERT INTO daily_activities(user_id,title,description,activity_type,scheduled_date,start_time,end_time,timezone,priority,reminder_time,notes,linked_task_id,linked_habit_id,linked_goal_id,recurrence,is_series_template)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
               [
                 user.userId,
                 input.title,
@@ -408,10 +522,16 @@ export async function registerActivities(
                 taskId,
                 input.linkedHabitId ?? null,
                 input.linkedGoalId ?? null,
+                input.recurrence,
+                input.recurrence === 'daily',
               ],
             )
           ).rows[0];
           if (!row) throw new Error('Activity insert failed');
+          await client.query(
+            'UPDATE daily_activities SET series_id=$1 WHERE id=$1',
+            [row.id],
+          );
           await audit(client, user.userId, row.id, 'CREATE', request.id, 1);
           return { id: row.id };
         });
@@ -459,6 +579,7 @@ export async function registerActivities(
               : input.description,
           activityType: input.activityType ?? row.activity_type,
           scheduledDate: input.scheduledDate ?? row.scheduled_date,
+          recurrence: row.recurrence,
           startTime:
             input.startTime === undefined
               ? (row.start_time?.slice(0, 5) ?? null)
@@ -501,22 +622,116 @@ export async function registerActivities(
           return 'taskDate';
         const error = await checkLinks(client, user.userId, next);
         if (error) return error;
-        await client.query(
-          `UPDATE daily_activities SET title=$1,description=$2,scheduled_date=$3,start_time=$4,end_time=$5,priority=$6,reminder_time=$7,notes=$8,linked_goal_id=$9,version=version+1,updated_at=now() WHERE id=$10 AND user_id=$11`,
-          [
-            next.title,
-            next.description ?? null,
-            next.scheduledDate,
-            next.startTime ?? null,
-            next.endTime ?? null,
-            next.priority,
-            next.reminderTime ?? null,
-            next.notes ?? null,
-            next.linkedGoalId ?? null,
-            id,
+        if (row.recurrence === 'daily') {
+          const templateId = row.series_id;
+          const template = await load(client, user.userId, templateId, true);
+          if (!template) return 'missing';
+          if (id === templateId) {
+            const newStartDate = next.scheduledDate;
+            if (newStartDate < row.scheduled_date) return 'recurrenceStartDate';
+            const updatedTemplate = await client.query<{ version: number }>(
+              `UPDATE daily_activities SET title=$1,description=$2,start_time=$3,end_time=$4,priority=$5,reminder_time=$6,notes=$7,linked_goal_id=$8,version=version+1,updated_at=now() WHERE id=$9 AND user_id=$10 RETURNING version`,
+              [
+                next.title,
+                next.description ?? null,
+                next.startTime ?? null,
+                next.endTime ?? null,
+                next.priority,
+                next.reminderTime ?? null,
+                next.notes ?? null,
+                next.linkedGoalId ?? null,
+                templateId,
+                user.userId,
+              ],
+            );
+            if (updatedTemplate.rows[0])
+              await audit(
+                client,
+                user.userId,
+                templateId,
+                'UPDATE',
+                request.id,
+                updatedTemplate.rows[0].version,
+              );
+          } else {
+            const updatedOccurrence = await client.query<{ version: number }>(
+              `UPDATE daily_activities SET title=$1,description=$2,start_time=$3,end_time=$4,priority=$5,reminder_time=$6,notes=$7,linked_goal_id=$8,version=version+1,updated_at=now() WHERE id=$9 AND user_id=$10 RETURNING version`,
+              [
+                next.title,
+                next.description ?? null,
+                next.startTime ?? null,
+                next.endTime ?? null,
+                next.priority,
+                next.reminderTime ?? null,
+                next.notes ?? null,
+                next.linkedGoalId ?? null,
+                id,
+                user.userId,
+              ],
+            );
+            if (updatedOccurrence.rows[0])
+              await audit(
+                client,
+                user.userId,
+                id,
+                'UPDATE',
+                request.id,
+                updatedOccurrence.rows[0].version,
+              );
+          }
+          const changed = await client.query<{ id: number; version: number }>(
+            `UPDATE daily_activities SET title=$1,description=$2,start_time=$3,end_time=$4,priority=$5,reminder_time=$6,notes=$7,linked_goal_id=$8,version=version+1,updated_at=now()
+              WHERE user_id=$9 AND series_id=$10 AND scheduled_date >= $11 AND id<>$12 AND cancelled_at IS NULL AND status NOT IN ('completed','skipped') RETURNING id,version`,
+            [
+              next.title,
+              next.description ?? null,
+              next.startTime ?? null,
+              next.endTime ?? null,
+              next.priority,
+              next.reminderTime ?? null,
+              next.notes ?? null,
+              next.linkedGoalId ?? null,
+              user.userId,
+              templateId,
+              id === templateId ? next.scheduledDate : row.scheduled_date,
+              templateId,
+            ],
+          );
+          for (const updated of changed.rows)
+            await audit(
+              client,
+              user.userId,
+              updated.id,
+              'UPDATE',
+              request.id,
+              updated.version,
+            );
+        } else {
+          await client.query(
+            `UPDATE daily_activities SET title=$1,description=$2,scheduled_date=$3,start_time=$4,end_time=$5,priority=$6,reminder_time=$7,notes=$8,linked_goal_id=$9,version=version+1,updated_at=now() WHERE id=$10 AND user_id=$11`,
+            [
+              next.title,
+              next.description ?? null,
+              next.scheduledDate,
+              next.startTime ?? null,
+              next.endTime ?? null,
+              next.priority,
+              next.reminderTime ?? null,
+              next.notes ?? null,
+              next.linkedGoalId ?? null,
+              id,
+              user.userId,
+            ],
+          );
+          await audit(
+            client,
             user.userId,
-          ],
-        );
+            id,
+            'UPDATE',
+            request.id,
+            row.version + 1,
+          );
+        }
         if (
           row.activity_type === 'task' &&
           (next.title !== row.title ||
@@ -533,14 +748,6 @@ export async function registerActivities(
               user.userId,
             ],
           );
-        await audit(
-          client,
-          user.userId,
-          id,
-          'UPDATE',
-          request.id,
-          row.version + 1,
-        );
         return 'ok';
       });
       if (outcome === 'missing')
@@ -567,6 +774,13 @@ export async function registerActivities(
           request,
           400,
           'Reschedule the task in Tasks before moving its time block',
+        );
+      if (outcome === 'recurrenceStartDate')
+        return fail(
+          reply,
+          request,
+          400,
+          'A recurrence start date cannot move earlier after the series is created',
         );
       if (outcome !== 'ok')
         return fail(
@@ -596,6 +810,7 @@ export async function registerActivities(
       const outcome = await transaction(pool, async (client) => {
         const row = await load(client, user.userId, id, true);
         if (!row) return 'missing';
+        if (row.recurrence === 'daily') return 'recurring';
         if (row.version !== input.version) return 'stale';
         if (row.status !== 'planned') return 'finished';
         if (
@@ -614,6 +829,7 @@ export async function registerActivities(
           description: row.description,
           activityType: row.activity_type,
           scheduledDate: input.scheduledDate,
+          recurrence: row.recurrence,
           startTime: input.startTime,
           endTime: input.endTime,
           priority: row.priority,
@@ -677,6 +893,13 @@ export async function registerActivities(
         return fail(reply, request, 404, 'Activity not found');
       if (outcome === 'stale')
         return fail(reply, request, 409, 'Activity changed on another device');
+      if (outcome === 'recurring')
+        return fail(
+          reply,
+          request,
+          400,
+          'Recurring activities are edited through their activity form',
+        );
       if (outcome !== 'ok')
         return fail(
           reply,
@@ -777,24 +1000,67 @@ export async function registerActivities(
         if (!row) return 'missing';
         if (row.version !== input.version) return 'stale';
         if (
-          row.status === 'completed' ||
-          row.task_completed_at ||
-          row.habit_status === 'completed'
+          (row.status === 'completed' ||
+            row.task_completed_at ||
+            row.habit_status === 'completed') &&
+          row.recurrence !== 'daily'
         )
           return 'completed';
-        await client.query(
-          "UPDATE daily_activities SET status='cancelled',cancelled_at=now(),version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2",
-          [id, user.userId],
-        );
-        await audit(
-          client,
-          user.userId,
-          id,
-          'CANCEL',
-          request.id,
-          row.version + 1,
-          true,
-        );
+        if (row.recurrence === 'daily') {
+          const template = await client.query<{
+            version: number;
+            series_ends_on: string | null;
+          }>(
+            'UPDATE daily_activities SET series_ends_on=least(coalesce(series_ends_on,$1),$1),version=version+1,updated_at=now() WHERE id=$2 AND user_id=$3 RETURNING version,series_ends_on',
+            [
+              addDays(localDate(row.scheduled_date), -1),
+              row.series_id,
+              user.userId,
+            ],
+          );
+          if (template.rows[0]) {
+            await audit(
+              client,
+              user.userId,
+              row.series_id,
+              'END_SERIES',
+              request.id,
+              template.rows[0].version,
+            );
+            const cancelled = await client.query<{
+              id: number;
+              version: number;
+            }>(
+              `UPDATE daily_activities SET status='cancelled',cancelled_at=now(),version=version+1,updated_at=now()
+                WHERE user_id=$1 AND series_id=$2 AND scheduled_date > $3 AND cancelled_at IS NULL AND status NOT IN ('completed','skipped') RETURNING id,version`,
+              [user.userId, row.series_id, template.rows[0].series_ends_on],
+            );
+            for (const occurrence of cancelled.rows)
+              await audit(
+                client,
+                user.userId,
+                occurrence.id,
+                'CANCEL',
+                request.id,
+                occurrence.version,
+                true,
+              );
+          }
+        } else {
+          await client.query(
+            "UPDATE daily_activities SET status='cancelled',cancelled_at=now(),version=version+1,updated_at=now() WHERE id=$1 AND user_id=$2",
+            [id, user.userId],
+          );
+          await audit(
+            client,
+            user.userId,
+            id,
+            'CANCEL',
+            request.id,
+            row.version + 1,
+            true,
+          );
+        }
         return 'ok';
       });
       if (outcome === 'missing')
