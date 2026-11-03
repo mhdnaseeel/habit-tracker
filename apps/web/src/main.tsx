@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createRoot } from 'react-dom/client';
-import { monthRange, weekRange } from './calendar.ts';
+import { addCalendarDays, monthRange, weekRange } from './calendar.ts';
 import { HistoryPanel, type HistoryWeek } from './history.tsx';
 import { TodayAgenda } from './today-agenda.tsx';
 import {
@@ -47,6 +47,8 @@ type HabitSummary = {
   category: string | null;
   active: boolean;
   version: number;
+  startDate: string;
+  endDate: string | null;
   schedules: {
     effectiveFrom: string;
     frequency: 'daily' | 'weekly' | 'monthly';
@@ -116,6 +118,8 @@ function App() {
     'daily',
   );
   const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [durationWeeks, setDurationWeeks] = useState<number | null>(8);
   const [monthDay, setMonthDay] = useState(1);
   const [target, setTarget] = useState(1);
   const [habitList, setHabitList] = useState<HabitSummary[] | null>(null);
@@ -331,10 +335,13 @@ function App() {
     setCategory('Wellbeing');
     setFrequency('daily');
     setWeekdays([]);
+    setStartDate('');
+    setDurationWeeks(8);
     setTarget(1);
   }
   function openCreateHabit() {
     closeHabitForm();
+    setStartDate(today?.date ?? '');
     setShowCreate(true);
   }
   function editRoutine(habit: HabitSummary) {
@@ -348,6 +355,17 @@ function App() {
     );
     setFrequency(schedule?.frequency ?? 'daily');
     setWeekdays(schedule?.weekdays ?? []);
+    setStartDate(habit.startDate);
+    const durationDays = habit.endDate
+      ? Math.round(
+          (Date.parse(`${habit.endDate}T12:00:00Z`) -
+            Date.parse(`${habit.startDate}T12:00:00Z`)) /
+            86400000,
+        ) + 1
+      : null;
+    setDurationWeeks(
+      durationDays && durationDays % 7 === 0 ? durationDays / 7 : null,
+    );
     setMonthDay(schedule?.monthDays[0] ?? 1);
     setTarget(schedule?.target ?? 1);
     setShowCreate(true);
@@ -364,6 +382,10 @@ function App() {
           : frequency === 'weekly'
             ? { frequency: 'weekly', weekdays }
             : { frequency: 'monthly', monthDays: [monthDay] };
+      const endDate =
+        frequency !== 'monthly' && durationWeeks
+          ? addCalendarDays(startDate, durationWeeks * 7 - 1)
+          : undefined;
       await request(
         editingHabit ? `/api/v1/habits/${editingHabit.id}` : '/api/v1/habits',
         editingHabit ? 'PUT' : 'POST',
@@ -372,9 +394,8 @@ function App() {
           category,
           schedule,
           target,
-          ...(editingHabit
-            ? { version: editingHabit.version }
-            : { startDate: today.date }),
+          ...(endDate ? { endDate } : {}),
+          ...(editingHabit ? { version: editingHabit.version } : { startDate }),
         },
       );
       closeHabitForm();
@@ -840,28 +861,34 @@ function App() {
                 </label>
                 {frequency === 'weekly' && (
                   <fieldset>
-                    <legend>Days of week</legend>
+                    <legend>Repeat on</legend>
                     <div className="weekdays">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
-                        (day, index) => (
-                          <label key={day}>
-                            <input
-                              type="checkbox"
-                              checked={weekdays.includes(index)}
-                              onChange={(e) =>
-                                setWeekdays(
-                                  e.target.checked
-                                    ? [...weekdays, index]
-                                    : weekdays.filter(
-                                        (value) => value !== index,
-                                      ),
-                                )
-                              }
-                            />
-                            {day}
-                          </label>
-                        ),
-                      )}
+                      {[
+                        ['Mon', 1],
+                        ['Tue', 2],
+                        ['Wed', 3],
+                        ['Thu', 4],
+                        ['Fri', 5],
+                        ['Sat', 6],
+                        ['Sun', 0],
+                      ].map(([day, index]) => (
+                        <label key={day}>
+                          <input
+                            type="checkbox"
+                            checked={weekdays.includes(Number(index))}
+                            onChange={(e) =>
+                              setWeekdays(
+                                e.target.checked
+                                  ? [...weekdays, Number(index)]
+                                  : weekdays.filter(
+                                      (value) => value !== Number(index),
+                                    ),
+                              )
+                            }
+                          />
+                          {day}
+                        </label>
+                      ))}
                     </div>
                   </fieldset>
                 )}
@@ -874,6 +901,35 @@ function App() {
                       max={31}
                       value={monthDay}
                       onChange={(e) => setMonthDay(Number(e.target.value))}
+                    />
+                  </label>
+                )}
+                {frequency !== 'monthly' && (
+                  <label>
+                    Duration (weeks)
+                    <input
+                      type="number"
+                      min={1}
+                      max={5200}
+                      step={1}
+                      required={!editingHabit}
+                      value={durationWeeks ?? ''}
+                      onChange={(e) =>
+                        setDurationWeeks(
+                          e.target.value === '' ? null : Number(e.target.value),
+                        )
+                      }
+                    />
+                  </label>
+                )}
+                {!editingHabit && (
+                  <label>
+                    Start date
+                    <input
+                      type="date"
+                      required
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
                     />
                   </label>
                 )}
@@ -892,6 +948,10 @@ function App() {
                   disabled={
                     busy ||
                     !today ||
+                    !startDate ||
+                    (!editingHabit &&
+                      frequency !== 'monthly' &&
+                      (!durationWeeks || durationWeeks < 1)) ||
                     (frequency === 'weekly' && weekdays.length === 0)
                   }
                 >
